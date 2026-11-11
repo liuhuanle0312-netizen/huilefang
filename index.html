@@ -111,9 +111,9 @@
   .ref-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .ref-remove { position: absolute; top: 2px; right: 2px; width: 20px; height: 20px; padding: 0; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; border: none; font-size: 12px; line-height: 1; }
   #status { margin: 0 0 16px; }
-  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .gallery { display: grid; grid-template-columns: 1fr; gap: 12px; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
-  .card img { width: 100%; display: block; cursor: zoom-in; background: #f3f4f6; min-height: 80px; }
+  .card img { width: 100%; height: auto; display: block; cursor: zoom-in; background: #f3f4f6; }
   .card .broken { padding: 40px 10px; text-align: center; color: var(--sub); font-size: 13px; background: #f3f4f6; }
   .card .meta { padding: 8px; font-size: 11px; color: var(--sub); }
   .card .prompt { color: var(--text); margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -1264,7 +1264,14 @@ function addCard(record, src, atTop) {
   card.append(imgEl, meta);
   atTop ? $('gallery').prepend(card) : $('gallery').append(card);
   updateEmpty();
+  return card;
 }
+
+let pendingSaves = 0;
+// 有图片正在存历史时，刷新或离开前提醒，避免保存被打断导致图片丢失
+window.addEventListener('beforeunload', (e) => {
+  if (pendingSaves > 0) { e.preventDefault(); e.returnValue = ''; }
+});
 
 $('genBtn').onclick = async () => {
   const supplierId = $('genSupplier').value;
@@ -1312,22 +1319,34 @@ $('genBtn').onclick = async () => {
     await finishProgress();
     const totalTime = Math.round((Date.now() - genStartTime) / 1000);
     $('genProgressTime').textContent = totalTime + ' 秒';
+    // 时间定格在生成耗时上，不再继续走（之前保存阶段计时还在跑，会和下面的总时间对不上）
+    clearInterval(genProgressTimer);
+    genProgressTimer = null;
 
     setMsg($('genMsg'), `${urls.length} 张，${totalTime} 秒`, 'ok');
 
     const warns = new Set(), errs = [];
-    for (const u of urls) {
+    const saves = urls.map(async (u) => {
       const meta = { prompt, model, mode: useRef ? 'images-ref' : 'images', gen_seconds: totalTime };
+      // 生成完立刻在下面显示图片，不等上传存库
+      const placeholder = addCard({ ...meta, created_at: new Date().toISOString() }, u, true);
+      historyOffset++;
+      pendingSaves++;
       try {
         const { record, displayUrl, warn } = await saveRecord(u, meta);
         if (warn) warns.add(warn);
-        addCard(record, displayUrl, true);
-        historyOffset++;
+        // 存好后用正式记录替换占位卡片，位置不变
+        const real = addCard(record, displayUrl, true);
+        $('gallery').insertBefore(real, placeholder);
+        placeholder.remove();
       } catch (e) {
         errs.push(e.message);
-        addCard({ ...meta, created_at: new Date().toISOString() }, u, true);
+        historyOffset--;
+      } finally {
+        pendingSaves--;
       }
-    }
+    });
+    await Promise.all(saves);
 
     if (errs.length) {
       setMsg($('genMsg'), `有 ${errs.length} 张保存失败`, 'error');
