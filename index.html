@@ -65,6 +65,7 @@
   .avatar-btn:hover { border-color: var(--accent); }
 
   .app-body { display: grid; grid-template-columns: 340px 1fr; flex: 1; }
+  .app-body.no-main { grid-template-columns: 1fr; }
   aside { background: var(--panel); padding: 20px; border-right: 1px solid var(--line); overflow-y: auto; }
   main { padding: 20px; overflow-y: auto; }
 
@@ -98,13 +99,18 @@
   .select-box-option:hover { background: #f3f4f6; }
   .select-box-option.active { background: rgba(37, 99, 235, 0.1); color: var(--accent); font-weight: 500; }
 
+  .ref-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 8px; }
+  .ref-grid:empty { display: none; }
+  .ref-thumb { position: relative; aspect-ratio: 1; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); background: #f3f4f6; }
+  .ref-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ref-remove { position: absolute; top: 2px; right: 2px; width: 20px; height: 20px; padding: 0; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; border: none; font-size: 12px; line-height: 1; }
   #status { margin: 0 0 16px; }
-  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
-  .card img { width: 100%; display: block; cursor: zoom-in; background: #f3f4f6; min-height: 120px; }
+  .card img { width: 100%; display: block; cursor: zoom-in; background: #f3f4f6; min-height: 80px; }
   .card .broken { padding: 40px 10px; text-align: center; color: var(--sub); font-size: 13px; background: #f3f4f6; }
-  .card .meta { padding: 10px; font-size: 12px; color: var(--sub); }
-  .card .prompt { color: var(--text); margin-bottom: 8px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .card .meta { padding: 8px; font-size: 11px; color: var(--sub); }
+  .card .prompt { color: var(--text); margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .card .actions { display: flex; gap: 6px; flex-wrap: wrap; }
   .card .actions a, .card .actions button { font-size: 12px; padding: 5px 10px; border-radius: 4px; background: #f3f4f6; color: var(--text); text-decoration: none; border: 1px solid var(--line); cursor: pointer; }
   .card .actions .danger { color: var(--danger); }
@@ -192,7 +198,7 @@
       </div>
     </div>
 
-    <div class="app-body">
+    <div class="app-body" id="appBody">
       <!-- 侧栏 -->
       <aside id="sidebar">
         <div id="aboutView" class="hidden">
@@ -239,6 +245,14 @@
           <div class="gen-section">
             <div class="gen-label">提示词</div>
             <textarea id="genPrompt" placeholder="描述你想要的画面"></textarea>
+          </div>
+
+          <div class="gen-section">
+            <div class="gen-label">参考图片 <span style="font-weight:400;">（最多 5 张，可选）</span></div>
+            <input type="file" id="refImageInput" accept="image/*" multiple style="display: none;">
+            <div class="ref-grid" id="refGrid"></div>
+            <button class="secondary" id="refAddBtn" style="width: 100%; margin-top: 8px;">＋ 添加参考图</button>
+            <div class="hint">参考图会一起发给模型做参考；有参考图时走对话接口生成，部分模型可能不支持，失败会提示。</div>
           </div>
 
           <div class="gen-section">
@@ -364,6 +378,8 @@ const SIGNED_URL_TTL = 3600;
 let sb, currentUser = null, recovering = false, signupMode = false, historyOffset = 0;
 let providers = {};
 let selectedSize = 'auto', selectedQuality = 'medium', genStartTime = null, genProgressTimer = null;
+let refImages = [];
+let genProgressValue = 0, genSimTimer = null;
 const PROVIDER_STORE_KEY = 'imggen-providers';
 const PROFILE_STORE_KEY = 'imggen-profile';
 
@@ -479,6 +495,11 @@ function showTab(tab) {
   const btns = { about: $('btnAbout'), providers: $('btnProviders'), generate: $('btnGenerate') };
   Object.values(btns).forEach(b => b.classList.remove('active'));
   if (btns[tab]) btns[tab].classList.add('active');
+
+  // 历史图片只在图片生成页显示，模型接入 / 软件介绍页隐藏整个主内容区
+  const showHistory = tab === 'generate';
+  $('mainContent').classList.toggle('hidden', !showHistory);
+  $('appBody').classList.toggle('no-main', !showHistory);
 
   if (tab === 'generate') {
     updateModelList();
@@ -678,8 +699,104 @@ $('qualityOptions').querySelectorAll('.select-box-option').forEach(opt => {
 
 $('genClearBtn').onclick = () => {
   $('genPrompt').value = '';
+  refImages = [];
+  renderRefPreviews();
   $('genPrompt').focus();
 };
+
+// 参考图片：最多 5 张，本地压缩后随请求发给模型
+function renderRefPreviews() {
+  const grid = $('refGrid');
+  grid.innerHTML = '';
+  refImages.forEach(r => {
+    const d = document.createElement('div');
+    d.className = 'ref-thumb';
+    const img = document.createElement('img');
+    img.src = r.dataUrl;
+    const x = document.createElement('button');
+    x.className = 'ref-remove';
+    x.textContent = '✕';
+    x.type = 'button';
+    x.onclick = () => { refImages = refImages.filter(v => v.id !== r.id); renderRefPreviews(); };
+    d.append(img, x);
+    grid.append(d);
+  });
+  $('refAddBtn').textContent = refImages.length ? `＋ 添加参考图（${refImages.length}/5）` : '＋ 添加参考图';
+  $('refAddBtn').disabled = refImages.length >= 5;
+}
+
+function compressRefImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('读取参考图失败'));
+    reader.onload = (evt) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('参考图无法读取'));
+      img.onload = () => {
+        const maxSide = 1024;
+        let w = img.width, h = img.height;
+        if (Math.max(w, h) > maxSide) {
+          const sc = maxSide / Math.max(w, h);
+          w = Math.round(w * sc); h = Math.round(h * sc);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.src = evt.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+$('refAddBtn').onclick = () => $('refImageInput').click();
+$('refImageInput').addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('image/'));
+  e.target.value = '';
+  if (!files.length) return;
+  const room = 5 - refImages.length;
+  if (room <= 0) return setMsg($('genMsg'), '参考图最多 5 张', 'error');
+  if (files.length > room) setMsg($('genMsg'), `参考图最多 5 张，只加了前 ${room} 张`, 'error');
+  else setMsg($('genMsg'), '');
+  for (const f of files.slice(0, room)) {
+    try {
+      const dataUrl = await compressRefImage(f);
+      refImages.push({ id: 'ref-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7), dataUrl });
+    } catch (err) { setMsg($('genMsg'), err.message, 'error'); }
+  }
+  renderRefPreviews();
+});
+renderRefPreviews();
+
+// 生成进度：有真实数据按数据走，没数据慢慢爬升封顶 99，生成返回后快速跳 100
+function setGenProgress(p) {
+  genProgressValue = Math.max(0, Math.min(100, Math.round(p)));
+  $('genProgressPercent').textContent = genProgressValue + '%';
+  $('genProgressBar').style.width = genProgressValue + '%';
+}
+function startSimProgress() {
+  stopSimProgress();
+  setGenProgress(0);
+  const t0 = Date.now();
+  genSimTimer = setInterval(() => {
+    const elapsed = (Date.now() - t0) / 1000;
+    const target = 99 * (1 - Math.exp(-elapsed / 25));
+    if (target > genProgressValue) setGenProgress(target);
+  }, 300);
+}
+function stopSimProgress() { if (genSimTimer) { clearInterval(genSimTimer); genSimTimer = null; } }
+async function finishProgress() {
+  stopSimProgress();
+  const from = genProgressValue;
+  if (from >= 100) return;
+  const steps = 5;
+  for (let i = 1; i <= steps; i++) {
+    await new Promise(r => setTimeout(r, 80));
+    setGenProgress(from + (100 - from) * i / steps);
+  }
+  setGenProgress(100);
+}
 
 // 个人资料
 function loadProfile() {
@@ -784,12 +901,77 @@ async function request(provider, path, body) {
   return data;
 }
 
-async function genByImages(provider, prompt, model, size, n) {
+async function fetchJsonWithProgress(url, options, onProgress) {
+  const res = await fetch(url, options);
+  const total = Number(res.headers.get('content-length')) || 0;
+  if (!res.body || !res.body.getReader) {
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); }
+    catch { throw new Error(`HTTP ${res.status}`); }
+    if (!res.ok || data.error) {
+      const msg = data.error?.message || data.message || JSON.stringify(data).slice(0, 300);
+      throw new Error(`HTTP ${res.status}：${msg}`);
+    }
+    return data;
+  }
+  const reader = res.body.getReader();
+  const chunks = [];
+  let loaded = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    loaded += value.length;
+    if (onProgress) onProgress(loaded, total);
+  }
+  const buf = new Uint8Array(loaded);
+  let off = 0;
+  chunks.forEach(c => { buf.set(c, off); off += c.length; });
+  const text = new TextDecoder().decode(buf);
+  let data;
+  try { data = JSON.parse(text); }
+  catch { throw new Error(`HTTP ${res.status}`); }
+  if (!res.ok || data.error) {
+    const msg = data.error?.message || data.message || JSON.stringify(data).slice(0, 300);
+    throw new Error(`HTTP ${res.status}：${msg}`);
+  }
+  return data;
+}
+
+async function genByImages(provider, prompt, model, size, n, onProgress) {
   const params = { model, prompt, n };
   if (size && size !== 'auto') params.size = size;
   if (selectedQuality) params.quality = selectedQuality;
-  const data = await request(provider, '/images/generations', params);
+  let url = provider.url.replace(/\/+$/, '');
+  if (!/\/v\d+$/.test(url)) url += '/v1';
+  const data = await fetchJsonWithProgress(url + '/images/generations', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + provider.key, 'Content-Type': 'application/json' },
+    body: JSON.stringify(params)
+  }, (loaded, total) => {
+    // 有总长度时按真实下载数据走（同样封顶 99），没总长度时不动，靠模拟进度
+    if (total > 0 && onProgress) onProgress(Math.min(99, Math.round(loaded / total * 99)));
+  });
   return (data.data || []).map(d => d.url || (d.b64_json ? 'data:image/png;base64,' + d.b64_json : null)).filter(Boolean);
+}
+
+// 有参考图时走对话接口：提示词 + 参考图一起发给模型出图
+async function genByChatWithRefs(provider, prompt, model, n, refUrls) {
+  const content = [{ type: 'text', text: prompt }];
+  refUrls.forEach(u => content.push({ type: 'image_url', image_url: { url: u } }));
+  const results = await Promise.allSettled(Array.from({ length: n }, () =>
+    request(provider, '/chat/completions', { model, messages: [{ role: 'user', content }] })));
+  const urls = [], errors = [];
+  results.forEach(r => {
+    if (r.status === 'fulfilled') {
+      const imgs = extractImagesFromChat(r.value);
+      if (imgs.length) urls.push(...imgs);
+      else errors.push('没有找到图片（该模型可能不支持参考图出图）');
+    } else errors.push(r.reason.message);
+  });
+  if (!urls.length) throw new Error(errors.join('\n'));
+  return urls;
 }
 
 function extractFromText(text) {
@@ -974,7 +1156,7 @@ $('genBtn').onclick = async () => {
   const model = $('genModel').value;
   const prompt = $('genPrompt').value.trim();
   const n = Math.min(Math.max(parseInt($('genCount').value) || 1, 1), 4);
-  
+
   if (!supplierId) return setMsg($('genMsg'), '请选择供应商', 'error');
   if (!model) return setMsg($('genMsg'), '请选择模型', 'error');
   if (!prompt) return setMsg($('genMsg'), '请输入提示词', 'error');
@@ -985,39 +1167,45 @@ $('genBtn').onclick = async () => {
   const btn = $('genBtn');
   btn.disabled = true;
   setMsg($('genMsg'), '');
-  
+
   $('genProgressWrap').classList.remove('hidden');
   genStartTime = Date.now();
-  let progressCount = 0;
-  
+  setGenProgress(0);
+  $('genProgressTime').textContent = '0 秒';
+
   genProgressTimer = setInterval(() => {
     const elapsed = (Date.now() - genStartTime) / 1000;
     $('genProgressTime').textContent = Math.round(elapsed) + ' 秒';
   }, 500);
+  // 模拟进度：没真实数据时慢慢爬升，封顶 99
+  startSimProgress();
 
   try {
-    const urls = await genByImages(provider, prompt, model, selectedSize, n);
-    
+    const useRef = refImages.length > 0;
+    const urls = useRef
+      ? await genByChatWithRefs(provider, prompt, model, n, refImages.map(r => r.dataUrl))
+      : await genByImages(provider, prompt, model, selectedSize, n, (p) => {
+          // 有真实下载数据时按数据走（同样封顶 99）
+          if (p > genProgressValue) setGenProgress(p);
+        });
+
     if (!urls.length) throw new Error('没有返回图片');
-    
-    clearInterval(genProgressTimer);
+
+    // 图片已生成返回，快速跳到 100
+    await finishProgress();
     const totalTime = Math.round((Date.now() - genStartTime) / 1000);
-    $('genProgressPercent').textContent = '100%';
     $('genProgressTime').textContent = totalTime + ' 秒';
 
     setMsg($('genMsg'), `${urls.length} 张，${totalTime} 秒`, 'ok');
 
     const warns = new Set(), errs = [];
     for (const u of urls) {
-      const meta = { prompt, model, gen_seconds: totalTime };
+      const meta = { prompt, model, mode: useRef ? 'images-ref' : 'images', gen_seconds: totalTime };
       try {
         const { record, displayUrl, warn } = await saveRecord(u, meta);
         if (warn) warns.add(warn);
         addCard(record, displayUrl, true);
         historyOffset++;
-        progressCount++;
-        const percent = Math.round((progressCount / urls.length) * 100);
-        $('genProgressPercent').textContent = percent + '%';
       } catch (e) {
         errs.push(e.message);
         addCard({ ...meta, created_at: new Date().toISOString() }, u, true);
@@ -1028,15 +1216,18 @@ $('genBtn').onclick = async () => {
       setMsg($('genMsg'), `有 ${errs.length} 张保存失败`, 'error');
     }
   } catch (e) {
+    stopSimProgress();
     clearInterval(genProgressTimer);
     let msg = e.message;
     if (e instanceof TypeError) msg += '（网络问题或跨域）';
     setMsg($('genMsg'), msg, 'error');
   } finally {
     btn.disabled = false;
+    clearInterval(genProgressTimer);
+    stopSimProgress();
     setTimeout(() => {
       $('genProgressWrap').classList.add('hidden');
-      $('genProgressPercent').textContent = '0%';
+      setGenProgress(0);
       $('genProgressTime').textContent = '0 秒';
     }, 2000);
   }
