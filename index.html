@@ -4,148 +4,321 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AI 图片生成</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   * { box-sizing: border-box; }
-  body {
-    margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-    background: #0f1115; color: #e6e6e6;
-  }
-  .wrap { display: grid; grid-template-columns: 340px 1fr; min-height: 100vh; }
-  aside { background: #171a21; padding: 20px; border-right: 1px solid #262a33; overflow-y: auto; }
-  main { padding: 20px; }
+  body { margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #0f1115; color: #e6e6e6; }
+  .hidden { display: none !important; }
   h1 { font-size: 18px; margin: 0 0 16px; }
   h2 { font-size: 14px; color: #9aa3b2; margin: 20px 0 8px; font-weight: 600; }
   label { display: block; font-size: 13px; color: #9aa3b2; margin: 10px 0 4px; }
-  input, select, textarea {
-    width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #2c313c;
-    background: #0f1115; color: #e6e6e6; font-size: 14px; font-family: inherit;
-  }
+  input, select, textarea { width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #2c313c; background: #0f1115; color: #e6e6e6; font-size: 14px; font-family: inherit; }
   textarea { min-height: 120px; resize: vertical; }
   input:focus, select:focus, textarea:focus { outline: none; border-color: #4f7cff; }
   .row { display: flex; gap: 8px; }
   .row > * { flex: 1; }
   .check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #9aa3b2; margin-top: 8px; }
   .check input { width: auto; }
-  button {
-    padding: 9px 14px; border: none; border-radius: 6px; cursor: pointer;
-    background: #2c313c; color: #e6e6e6; font-size: 14px;
-  }
+  button { padding: 9px 14px; border: none; border-radius: 6px; cursor: pointer; background: #2c313c; color: #e6e6e6; font-size: 14px; }
   button:hover { background: #363c49; }
   button.primary { background: #4f7cff; color: #fff; width: 100%; margin-top: 14px; padding: 11px; font-size: 15px; }
   button.primary:hover { background: #3d6af0; }
   button:disabled { opacity: .5; cursor: not-allowed; }
+  button.link { background: none; color: #7d9bff; padding: 0; font-size: 13px; }
   .hint { font-size: 12px; color: #6b7384; margin-top: 4px; line-height: 1.5; }
-  #status { margin-bottom: 16px; font-size: 14px; color: #9aa3b2; min-height: 20px; white-space: pre-wrap; }
-  #status.error { color: #ff6b6b; }
+  .msg { font-size: 14px; color: #9aa3b2; min-height: 20px; white-space: pre-wrap; margin-top: 12px; line-height: 1.5; }
+  .msg.error { color: #ff6b6b; }
+  .msg.ok { color: #5ad18a; }
+
+  /* 登录页 */
+  .auth-box { max-width: 380px; margin: 60px auto; padding: 24px; background: #171a21; border: 1px solid #262a33; border-radius: 10px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 8px; }
+  .tabs button { flex: 1; }
+  .tabs button.active { background: #4f7cff; color: #fff; }
+  .center { text-align: center; margin-top: 14px; }
+
+  /* 主界面 */
+  .wrap { display: grid; grid-template-columns: 340px 1fr; min-height: 100vh; }
+  aside { background: #171a21; padding: 20px; border-right: 1px solid #262a33; overflow-y: auto; }
+  main { padding: 20px; }
+  .userbar { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #9aa3b2; margin-bottom: 16px; gap: 8px; }
+  .userbar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .userbar button { padding: 5px 10px; font-size: 12px; flex-shrink: 0; }
+  #status { margin: 0 0 16px; }
   .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
   .card { background: #171a21; border: 1px solid #262a33; border-radius: 8px; overflow: hidden; }
-  .card img { width: 100%; display: block; cursor: zoom-in; background: #0b0d10; }
+  .card img { width: 100%; display: block; cursor: zoom-in; background: #0b0d10; min-height: 120px; }
+  .card .broken { padding: 40px 10px; text-align: center; color: #6b7384; font-size: 13px; background: #0b0d10; }
   .card .meta { padding: 10px; font-size: 12px; color: #9aa3b2; }
   .card .prompt { color: #c9ced8; margin-bottom: 8px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-  .card .actions { display: flex; gap: 6px; }
-  .card .actions a, .card .actions button {
-    font-size: 12px; padding: 5px 10px; border-radius: 4px; background: #2c313c;
-    color: #e6e6e6; text-decoration: none; border: none; cursor: pointer;
-  }
+  .card .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .card .actions a, .card .actions button { font-size: 12px; padding: 5px 10px; border-radius: 4px; background: #2c313c; color: #e6e6e6; text-decoration: none; border: none; cursor: pointer; }
+  .card .actions .danger { color: #ff8a8a; }
   .empty { color: #6b7384; text-align: center; margin-top: 80px; }
-  #viewer {
-    position: fixed; inset: 0; background: rgba(0,0,0,.9); display: none;
-    align-items: center; justify-content: center; z-index: 10; cursor: zoom-out;
-  }
+  #loadMore { display: block; margin: 20px auto; }
+  #viewer { position: fixed; inset: 0; background: rgba(0,0,0,.9); display: none; align-items: center; justify-content: center; z-index: 10; cursor: zoom-out; }
   #viewer img { max-width: 95vw; max-height: 95vh; }
-  @media (max-width: 800px) { .wrap { grid-template-columns: 1fr; } aside { border-right: none; border-bottom: 1px solid #262a33; } }
+  @media (max-width: 800px) {
+    .wrap { grid-template-columns: 1fr; }
+    aside { border-right: none; border-bottom: 1px solid #262a33; }
+    input, select, textarea { font-size: 16px; }
+    .auth-box { margin: 30px 16px; }
+  }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <aside>
+
+<!-- 加载中 -->
+<div id="viewLoading" class="empty">加载中…</div>
+
+<!-- 登录 / 注册 -->
+<div id="viewAuth" class="hidden">
+  <div class="auth-box">
     <h1>AI 图片生成</h1>
-
-    <h2>接口设置</h2>
-    <label>中转站地址</label>
-    <input id="baseUrl" placeholder="https://api.example.com">
-    <div class="hint">地址末尾没有 /v1 时会自动补上</div>
-
-    <label>API Key</label>
-    <input id="apiKey" type="password" placeholder="sk-...">
-    <div class="check"><input type="checkbox" id="remember" checked><span>在本浏览器记住 Key</span></div>
-
-    <label>接口模式</label>
-    <select id="mode">
-      <option value="images">图片接口 /images/generations</option>
-      <option value="chat">对话接口 /chat/completions</option>
-    </select>
-
-    <label>模型</label>
-    <div class="row">
-      <input id="model" list="modelList" placeholder="dall-e-3 / gpt-image-1 ..." style="flex:3">
-      <button id="loadModels" style="flex:1">拉取</button>
+    <div class="tabs">
+      <button id="tabLogin" class="active">登录</button>
+      <button id="tabSignup">注册</button>
     </div>
-    <datalist id="modelList"></datalist>
-
-    <h2>生成参数</h2>
-    <label>提示词</label>
-    <textarea id="prompt" placeholder="描述你想要的画面"></textarea>
-
-    <div class="row">
-      <div>
-        <label>尺寸</label>
-        <select id="size">
-          <option value="1024x1024">1024×1024</option>
-          <option value="1792x1024">1792×1024 横</option>
-          <option value="1024x1792">1024×1792 竖</option>
-          <option value="1536x1024">1536×1024 横</option>
-          <option value="1024x1536">1024×1536 竖</option>
-          <option value="512x512">512×512</option>
-        </select>
-      </div>
-      <div>
-        <label>数量</label>
-        <input id="count" type="number" min="1" max="4" value="1">
-      </div>
+    <label>邮箱</label>
+    <input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com">
+    <label>密码</label>
+    <input id="authPassword" type="password" autocomplete="current-password" placeholder="至少 6 位">
+    <div id="confirmWrap" class="hidden">
+      <label>确认密码</label>
+      <input id="authPassword2" type="password" autocomplete="new-password">
     </div>
-    <div class="hint">对话模式下尺寸不生效，数量按请求次数计算</div>
+    <button class="primary" id="authSubmit">登录</button>
+    <div class="center"><button class="link" id="forgotBtn">忘记密码？</button></div>
+    <div class="msg" id="authMsg"></div>
+  </div>
+</div>
 
-    <button class="primary" id="generate">生成</button>
-    <div class="hint">快捷键：Ctrl / ⌘ + Enter</div>
-  </aside>
+<!-- 重设密码（从邮件链接进入） -->
+<div id="viewReset" class="hidden">
+  <div class="auth-box">
+    <h1>设置新密码</h1>
+    <label>新密码</label>
+    <input id="newPassword" type="password" autocomplete="new-password" placeholder="至少 6 位">
+    <button class="primary" id="resetSubmit">保存新密码</button>
+    <div class="msg" id="resetMsg"></div>
+  </div>
+</div>
 
-  <main>
-    <div id="status"></div>
-    <div class="gallery" id="gallery"></div>
-    <div class="empty" id="empty">生成的图片会显示在这里</div>
-  </main>
+<!-- 主界面 -->
+<div id="viewApp" class="hidden">
+  <div class="wrap">
+    <aside>
+      <div class="userbar"><span id="userEmail"></span><button id="logoutBtn">退出</button></div>
+      <h1>AI 图片生成</h1>
+
+      <h2>接口设置</h2>
+      <label>中转站地址</label>
+      <input id="baseUrl" placeholder="https://api.example.com">
+      <div class="hint">地址末尾没有 /v1 时会自动补上</div>
+
+      <label>API Key</label>
+      <input id="apiKey" type="password" placeholder="sk-...">
+      <div class="check"><input type="checkbox" id="remember" checked><span>在本浏览器记住 Key</span></div>
+      <div class="hint">Key 只保存在你这台设备的浏览器里，不会上传到网站服务器</div>
+
+      <label>接口模式</label>
+      <select id="mode">
+        <option value="images">图片接口 /images/generations</option>
+        <option value="chat">对话接口 /chat/completions</option>
+      </select>
+
+      <label>模型</label>
+      <div class="row">
+        <input id="model" list="modelList" placeholder="gpt-image-1 ..." style="flex:3">
+        <button id="loadModels" style="flex:1">拉取</button>
+      </div>
+      <datalist id="modelList"></datalist>
+
+      <h2>生成参数</h2>
+      <label>提示词</label>
+      <textarea id="prompt" placeholder="描述你想要的画面"></textarea>
+      <div class="row">
+        <div>
+          <label>尺寸</label>
+          <select id="size">
+            <option value="1024x1024">1024×1024</option>
+            <option value="1536x1024">1536×1024 横</option>
+            <option value="1024x1536">1024×1536 竖</option>
+            <option value="1792x1024">1792×1024 横</option>
+            <option value="1024x1792">1024×1792 竖</option>
+            <option value="512x512">512×512</option>
+          </select>
+        </div>
+        <div>
+          <label>数量</label>
+          <input id="count" type="number" min="1" max="4" value="1">
+        </div>
+      </div>
+      <div class="hint">对话模式下尺寸不生效，数量按请求次数计算</div>
+      <button class="primary" id="generate">生成</button>
+    </aside>
+
+    <main>
+      <div class="msg" id="status"></div>
+      <div class="gallery" id="gallery"></div>
+      <div class="empty" id="empty">还没有生成记录</div>
+      <button id="loadMore" class="hidden">加载更多</button>
+    </main>
+  </div>
 </div>
 
 <div id="viewer"><img></div>
 
 <script>
-const $ = id => document.getElementById(id);
-const FIELDS = ['baseUrl', 'apiKey', 'mode', 'model', 'size', 'count'];
-const STORE_KEY = 'imggen-settings';
+// ======== 改成你自己的 Supabase 项目信息 ========
+const SUPABASE_URL = 'https://xmwgwldhzhdsgklmvgpg.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_ZTfPpyiMKJLe9POArBS4OQ_Akd8SPQu';
+// ================================================
 
-// ---------- 设置的保存与读取 ----------
+const $ = id => document.getElementById(id);
+const PAGE_SIZE = 30;
+const SIGNED_URL_TTL = 3600; // 私有图片链接有效期（秒）
+
+let sb, currentUser = null, recovering = false, signupMode = false, historyOffset = 0;
+
+function show(view) {
+  ['viewLoading', 'viewAuth', 'viewReset', 'viewApp'].forEach(v => $(v).classList.toggle('hidden', v !== view));
+}
+function setMsg(el, text, type = '') { el.textContent = text; el.className = 'msg' + (type ? ' ' + type : ''); }
+function setStatus(text, isError = false) { setMsg($('status'), text, isError ? 'error' : ''); }
+
+function translateAuthError(e) {
+  const m = e?.message || String(e);
+  if (/Invalid login credentials/i.test(m)) return '邮箱或密码错误';
+  if (/Email not confirmed/i.test(m)) return '邮箱还没验证，请先点击验证邮件里的链接';
+  if (/already registered|already been registered/i.test(m)) return '这个邮箱已经注册过了，请直接登录';
+  if (/at least 6|Password should be/i.test(m)) return '密码至少 6 位';
+  if (/rate limit|too many/i.test(m)) return '操作太频繁，请稍后再试（免费版每小时发送邮件的数量有限）';
+  if (/invalid.*email|Unable to validate email/i.test(m)) return '邮箱格式不正确';
+  if (/Failed to fetch/i.test(m)) return '连接不上服务器，请检查网络';
+  return m;
+}
+
+// ---------- 初始化 ----------
+if (SUPABASE_URL.includes('你的项目') || !window.supabase) {
+  $('viewLoading').textContent = !window.supabase
+    ? 'Supabase 组件加载失败，请检查网络后刷新'
+    : '请先在代码里填写 SUPABASE_URL 和 SUPABASE_KEY';
+} else {
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  sb.auth.onAuthStateChange((event, session) => {
+    // 回调里不直接 await Supabase 请求，避免卡死，用 setTimeout 推迟执行
+    setTimeout(() => {
+      if (event === 'PASSWORD_RECOVERY') { recovering = true; show('viewReset'); return; }
+      if (recovering) return;
+      const user = session?.user || null;
+      if (user && user.id !== currentUser?.id) enterApp(user);
+      else if (!user) { currentUser = null; show('viewAuth'); }
+    }, 0);
+  });
+}
+
+// ---------- 登录 / 注册 ----------
+function setTab(signup) {
+  signupMode = signup;
+  $('tabLogin').classList.toggle('active', !signup);
+  $('tabSignup').classList.toggle('active', signup);
+  $('confirmWrap').classList.toggle('hidden', !signup);
+  $('authSubmit').textContent = signup ? '注册' : '登录';
+  $('authPassword').autocomplete = signup ? 'new-password' : 'current-password';
+  setMsg($('authMsg'), '');
+}
+$('tabLogin').onclick = () => setTab(false);
+$('tabSignup').onclick = () => setTab(true);
+
+const redirectUrl = location.origin + location.pathname;
+
+$('authSubmit').onclick = async () => {
+  const email = $('authEmail').value.trim();
+  const password = $('authPassword').value;
+  if (!email || !password) return setMsg($('authMsg'), '请填写邮箱和密码', 'error');
+  if (signupMode && password !== $('authPassword2').value) return setMsg($('authMsg'), '两次输入的密码不一致', 'error');
+
+  const btn = $('authSubmit');
+  btn.disabled = true;
+  try {
+    if (signupMode) {
+      const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: redirectUrl } });
+      if (error) throw error;
+      // 邮箱已注册时 Supabase 不报错，但返回的 identities 是空数组
+      if (data.user && data.user.identities?.length === 0) throw new Error('already registered');
+      setMsg($('authMsg'), '注册成功！验证邮件已发到 ' + email + '，点击邮件里的链接后就能登录。\n没收到的话看看垃圾邮件箱。', 'ok');
+    } else {
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+    }
+  } catch (e) {
+    setMsg($('authMsg'), translateAuthError(e), 'error');
+  } finally {
+    btn.disabled = false;
+  }
+};
+$('authPassword').addEventListener('keydown', e => { if (e.key === 'Enter' && !signupMode) $('authSubmit').click(); });
+
+$('forgotBtn').onclick = async () => {
+  const email = $('authEmail').value.trim();
+  if (!email) return setMsg($('authMsg'), '请先在上面填写邮箱，再点"忘记密码"', 'error');
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: redirectUrl });
+  if (error) setMsg($('authMsg'), translateAuthError(error), 'error');
+  else setMsg($('authMsg'), '重设密码的邮件已发送，请查收', 'ok');
+};
+
+$('resetSubmit').onclick = async () => {
+  const password = $('newPassword').value;
+  if (password.length < 6) return setMsg($('resetMsg'), '密码至少 6 位', 'error');
+  const { error } = await sb.auth.updateUser({ password });
+  if (error) return setMsg($('resetMsg'), translateAuthError(error), 'error');
+  setMsg($('resetMsg'), '密码已更新，正在进入…', 'ok');
+  setTimeout(() => location.replace(redirectUrl), 1000);
+};
+
+$('logoutBtn').onclick = () => sb.auth.signOut();
+
+// ---------- 进入主界面 ----------
+function enterApp(user) {
+  currentUser = user;
+  $('userEmail').textContent = user.email;
+  history.replaceState(null, '', redirectUrl); // 清掉地址栏里验证链接带的参数
+  loadSettings();
+  $('gallery').innerHTML = '';
+  historyOffset = 0;
+  show('viewApp');
+  loadHistory();
+}
+
+// ---------- 设置（按用户分开保存在本地） ----------
+const FIELDS = ['baseUrl', 'apiKey', 'mode', 'model', 'size', 'count'];
+const DEFAULTS = { baseUrl: '', apiKey: '', mode: 'images', model: '', size: '1024x1024', count: '1' };
+const storeKey = () => 'imggen-settings-' + currentUser.id;
+
 function loadSettings() {
-  const s = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
-  FIELDS.forEach(f => { if (s[f] !== undefined) $(f).value = s[f]; });
-  if (s.remember === false) $('remember').checked = false;
+  // 兼容旧版：第一次登录时沿用之前保存的地址和 Key
+  const raw = localStorage.getItem(storeKey()) || localStorage.getItem('imggen-settings') || '{}';
+  const s = JSON.parse(raw);
+  FIELDS.forEach(f => $(f).value = s[f] ?? DEFAULTS[f]);
+  $('remember').checked = s.remember !== false;
 }
 function saveSettings() {
+  if (!currentUser) return;
   const s = { remember: $('remember').checked };
   FIELDS.forEach(f => s[f] = $(f).value);
   if (!s.remember) delete s.apiKey;
-  localStorage.setItem(STORE_KEY, JSON.stringify(s));
+  localStorage.setItem(storeKey(), JSON.stringify(s));
 }
 FIELDS.concat('remember').forEach(f => $(f).addEventListener('change', saveSettings));
 
-// ---------- 请求 ----------
+// ---------- 调用中转站 ----------
 function apiBase() {
   let u = $('baseUrl').value.trim().replace(/\/+$/, '');
   if (!u) throw new Error('请填写中转站地址');
   if (!/\/v\d+$/.test(u)) u += '/v1';
   return u;
 }
-
 async function request(path, body) {
   const key = $('apiKey').value.trim();
   if (!key) throw new Error('请填写 API Key');
@@ -164,48 +337,32 @@ async function request(path, body) {
   }
   return data;
 }
-
-// 图片接口：返回 data[].url 或 data[].b64_json
 async function genByImages(prompt, model, size, n) {
   const data = await request('/images/generations', { model, prompt, n, size });
-  return (data.data || []).map(d =>
-    d.url || (d.b64_json ? 'data:image/png;base64,' + d.b64_json : null)
-  ).filter(Boolean);
-}
-
-// 对话接口：从回复里提取图片
-function extractImagesFromChat(data) {
-  const msg = data.choices?.[0]?.message || {};
-  const urls = [];
-  // 1) message.images 字段（OpenRouter 等平台的格式）
-  (msg.images || []).forEach(i => urls.push(i.image_url?.url || i.url));
-  // 2) content 是数组的情况
-  const content = msg.content;
-  if (Array.isArray(content)) {
-    content.forEach(p => {
-      if (p.type === 'image_url') urls.push(p.image_url?.url);
-      if (p.type === 'text' && p.text) urls.push(...extractFromText(p.text));
-    });
-  } else if (typeof content === 'string') {
-    urls.push(...extractFromText(content));
-  }
-  return [...new Set(urls.filter(Boolean))];
+  return (data.data || []).map(d => d.url || (d.b64_json ? 'data:image/png;base64,' + d.b64_json : null)).filter(Boolean);
 }
 function extractFromText(text) {
   const out = [];
   for (const m of text.matchAll(/!\[[^\]]*\]\(\s*([^)\s]+)\s*\)/g)) out.push(m[1]);
   for (const m of text.matchAll(/data:image\/[a-zA-Z+]+;base64,[A-Za-z0-9+/=]+/g)) out.push(m[0]);
-  if (!out.length) {
-    for (const m of text.matchAll(/https?:\/\/[^\s"'<>)]+\.(?:png|jpe?g|webp|gif)(?:\?[^\s"'<>)]*)?/gi)) out.push(m[0]);
-  }
+  if (!out.length) for (const m of text.matchAll(/https?:\/\/[^\s"'<>)]+\.(?:png|jpe?g|webp|gif)(?:\?[^\s"'<>)]*)?/gi)) out.push(m[0]);
   return out;
 }
-
+function extractImagesFromChat(data) {
+  const msg = data.choices?.[0]?.message || {};
+  const urls = [];
+  (msg.images || []).forEach(i => urls.push(i.image_url?.url || i.url));
+  const c = msg.content;
+  if (Array.isArray(c)) c.forEach(p => {
+    if (p.type === 'image_url') urls.push(p.image_url?.url);
+    if (p.type === 'text' && p.text) urls.push(...extractFromText(p.text));
+  });
+  else if (typeof c === 'string') urls.push(...extractFromText(c));
+  return [...new Set(urls.filter(Boolean))];
+}
 async function genByChat(prompt, model, n) {
-  const tasks = Array.from({ length: n }, () =>
-    request('/chat/completions', { model, messages: [{ role: 'user', content: prompt }] })
-  );
-  const results = await Promise.allSettled(tasks);
+  const results = await Promise.allSettled(Array.from({ length: n }, () =>
+    request('/chat/completions', { model, messages: [{ role: 'user', content: prompt }] })));
   const urls = [], errors = [];
   results.forEach(r => {
     if (r.status === 'fulfilled') {
@@ -218,49 +375,122 @@ async function genByChat(prompt, model, n) {
   return urls;
 }
 
-// ---------- 界面 ----------
-function setStatus(text, isError = false) {
-  $('status').textContent = text;
-  $('status').className = isError ? 'error' : '';
+// ---------- 保存记录 ----------
+async function toBlob(src) {
+  const res = await fetch(src); // data: 链接一定能转；外部链接要看对方是否允许跨域
+  if (!res.ok) throw new Error('下载图片失败');
+  return res.blob();
+}
+// 返回 { record, displayUrl, warn }
+async function saveRecord(src, meta) {
+  let image_path = null, image_url = null, warn = '';
+  try {
+    const blob = await toBlob(src);
+    const type = blob.type && blob.type.startsWith('image/') ? blob.type : 'image/png';
+    const ext = ({ 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' })[type] || 'png';
+    const path = `${currentUser.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error } = await sb.storage.from('images').upload(path, blob, { contentType: type });
+    if (error) throw error;
+    image_path = path;
+  } catch (e) {
+    if (src.startsWith('data:')) throw new Error('图片上传失败：' + (e.message || e));
+    image_url = src; // 外部链接存不进来，就只保存链接
+    warn = '有图片没能存进云端，只保存了原始链接，链接过期后会失效，请及时下载';
+  }
+  const { data, error } = await sb.from('generations')
+    .insert({ ...meta, image_path, image_url }).select().single();
+  if (error) throw new Error('保存记录失败：' + error.message);
+  return { record: data, displayUrl: src, warn };
 }
 
-function addCard(src, prompt, model) {
-  $('empty').style.display = 'none';
+// ---------- 历史记录 ----------
+async function loadHistory() {
+  $('loadMore').disabled = true;
+  const { data, error } = await sb.from('generations').select('*')
+    .order('created_at', { ascending: false })
+    .range(historyOffset, historyOffset + PAGE_SIZE - 1);
+  $('loadMore').disabled = false;
+  if (error) return setStatus('读取历史记录失败：' + error.message, true);
+
+  const paths = data.filter(r => r.image_path).map(r => r.image_path);
+  const signed = {};
+  if (paths.length) {
+    const { data: s } = await sb.storage.from('images').createSignedUrls(paths, SIGNED_URL_TTL);
+    (s || []).forEach(x => { if (x.signedUrl) signed[x.path] = x.signedUrl; });
+  }
+  data.forEach(r => addCard(r, signed[r.image_path] || r.image_url, false));
+  historyOffset += data.length;
+  $('loadMore').classList.toggle('hidden', data.length < PAGE_SIZE);
+  updateEmpty();
+}
+$('loadMore').onclick = loadHistory;
+
+function updateEmpty() { $('empty').style.display = $('gallery').children.length ? 'none' : 'block'; }
+
+function addCard(record, src, atTop) {
   const card = document.createElement('div');
   card.className = 'card';
 
-  const img = document.createElement('img');
-  img.src = src;
-  img.onclick = () => { $('viewer').querySelector('img').src = src; $('viewer').style.display = 'flex'; };
+  let imgEl;
+  if (src) {
+    imgEl = document.createElement('img');
+    imgEl.src = src;
+    imgEl.loading = 'lazy';
+    imgEl.onclick = () => { $('viewer').querySelector('img').src = src; $('viewer').style.display = 'flex'; };
+    imgEl.onerror = () => { const b = document.createElement('div'); b.className = 'broken'; b.textContent = '图片已失效'; imgEl.replaceWith(b); };
+  } else {
+    imgEl = document.createElement('div');
+    imgEl.className = 'broken';
+    imgEl.textContent = '图片已失效';
+  }
 
   const meta = document.createElement('div');
   meta.className = 'meta';
   const p = document.createElement('div');
   p.className = 'prompt';
-  p.textContent = prompt;            // 用 textContent，避免把提示词当 HTML 解析
+  p.textContent = record.prompt;
   const info = document.createElement('div');
-  info.textContent = `${model} · ${new Date().toLocaleTimeString()}`;
   info.style.marginBottom = '8px';
+  info.textContent = `${record.model || ''} · ${new Date(record.created_at || Date.now()).toLocaleString()}`;
 
   const actions = document.createElement('div');
   actions.className = 'actions';
-  const dl = document.createElement('a');
-  dl.textContent = '下载';
-  dl.href = src;
-  dl.download = `image-${Date.now()}.png`;
-  dl.target = '_blank';
+  if (src) {
+    const dl = document.createElement('a');
+    dl.textContent = '下载';
+    dl.href = src;
+    dl.download = `image-${record.id || Date.now()}.png`;
+    dl.target = '_blank';
+    actions.append(dl);
+  }
   const reuse = document.createElement('button');
   reuse.textContent = '复用提示词';
-  reuse.onclick = () => { $('prompt').value = prompt; $('prompt').focus(); };
-  actions.append(dl, reuse);
+  reuse.onclick = () => { $('prompt').value = record.prompt; $('prompt').focus(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  actions.append(reuse);
+
+  if (record.id) {
+    const del = document.createElement('button');
+    del.textContent = '删除';
+    del.className = 'danger';
+    del.onclick = async () => {
+      if (!confirm('确定删除这条记录吗？删除后无法恢复。')) return;
+      if (record.image_path) await sb.storage.from('images').remove([record.image_path]);
+      const { error } = await sb.from('generations').delete().eq('id', record.id);
+      if (error) return setStatus('删除失败：' + error.message, true);
+      card.remove();
+      historyOffset = Math.max(0, historyOffset - 1);
+      updateEmpty();
+    };
+    actions.append(del);
+  }
 
   meta.append(p, info, actions);
-  card.append(img, meta);
-  $('gallery').prepend(card);
+  card.append(imgEl, meta);
+  atTop ? $('gallery').prepend(card) : $('gallery').append(card);
+  updateEmpty();
 }
 
-$('viewer').onclick = () => $('viewer').style.display = 'none';
-
+// ---------- 生成 ----------
 $('generate').onclick = async () => {
   const prompt = $('prompt').value.trim();
   const model = $('model').value.trim();
@@ -277,12 +507,27 @@ $('generate').onclick = async () => {
   const timer = setInterval(() => setStatus(`生成中… ${((Date.now() - start) / 1000).toFixed(0)} 秒`), 500);
 
   try {
-    const urls = mode === 'images'
-      ? await genByImages(prompt, model, size, n)
-      : await genByChat(prompt, model, n);
+    const urls = mode === 'images' ? await genByImages(prompt, model, size, n) : await genByChat(prompt, model, n);
     if (!urls.length) throw new Error('接口返回成功，但没有图片数据');
-    urls.forEach(u => addCard(u, prompt, model));
-    setStatus(`完成，${urls.length} 张，用时 ${((Date.now() - start) / 1000).toFixed(1)} 秒`);
+    clearInterval(timer);
+    setStatus('生成完成，正在保存…');
+
+    const warns = new Set(), errs = [];
+    for (const u of urls) {
+      const meta = { prompt, model, mode, size: mode === 'images' ? size : null };
+      try {
+        const { record, displayUrl, warn } = await saveRecord(u, meta);
+        if (warn) warns.add(warn);
+        addCard(record, displayUrl, true);
+        historyOffset++;
+      } catch (e) {
+        errs.push(e.message);
+        addCard({ ...meta, created_at: new Date().toISOString() }, u, true); // 没存上也先显示出来
+      }
+    }
+    const secs = ((Date.now() - start) / 1000).toFixed(1);
+    if (errs.length) setStatus(`生成了 ${urls.length} 张，用时 ${secs} 秒，但有 ${errs.length} 张没保存成功：\n${errs.join('\n')}\n请先手动下载这些图片`, true);
+    else setStatus(`完成，${urls.length} 张，用时 ${secs} 秒，已保存` + (warns.size ? '\n' + [...warns].join('\n') : ''));
   } catch (e) {
     let msg = e.message;
     if (e instanceof TypeError) msg += '\n可能是网络问题，或中转站不允许浏览器直接跨域访问（CORS）。';
@@ -292,10 +537,7 @@ $('generate').onclick = async () => {
     btn.disabled = false;
   }
 };
-
-$('prompt').addEventListener('keydown', e => {
-  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('generate').click();
-});
+$('prompt').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('generate').click(); });
 
 $('loadModels').onclick = async () => {
   try {
@@ -310,7 +552,7 @@ $('loadModels').onclick = async () => {
   }
 };
 
-loadSettings();
+$('viewer').onclick = () => $('viewer').style.display = 'none';
 </script>
 </body>
 </html>
