@@ -252,7 +252,7 @@
             <input type="file" id="refImageInput" accept="image/*" multiple style="display: none;">
             <div class="ref-grid" id="refGrid"></div>
             <button class="secondary" id="refAddBtn" style="width: 100%; margin-top: 8px;">＋ 添加参考图</button>
-            <div class="hint">参考图会一起发给模型做参考；有参考图时走对话接口生成，部分模型可能不支持，失败会提示。</div>
+            <div class="hint">参考图会一起发给模型做参考；有参考图时走图片编辑接口生成。</div>
           </div>
 
           <div class="gen-section">
@@ -956,63 +956,43 @@ async function genByImages(provider, prompt, model, size, n, onProgress) {
   return (data.data || []).map(d => d.url || (d.b64_json ? 'data:image/png;base64,' + d.b64_json : null)).filter(Boolean);
 }
 
-// 有参考图时走对话接口：提示词 + 参考图一起发给模型出图
-async function genByChatWithRefs(provider, prompt, model, n, refUrls) {
-  const content = [{ type: 'text', text: prompt }];
-  refUrls.forEach(u => content.push({ type: 'image_url', image_url: { url: u } }));
-  const results = await Promise.allSettled(Array.from({ length: n }, () =>
-    request(provider, '/chat/completions', { model, messages: [{ role: 'user', content }] })));
-  const urls = [], errors = [];
-  results.forEach(r => {
-    if (r.status === 'fulfilled') {
-      const imgs = extractImagesFromChat(r.value);
-      if (imgs.length) urls.push(...imgs);
-      else errors.push('没有找到图片（该模型可能不支持参考图出图）');
-    } else errors.push(r.reason.message);
-  });
-  if (!urls.length) throw new Error(errors.join('\n'));
-  return urls;
+function dataUrlToBlob(dataUrl) {
+  const parts = dataUrl.split(',');
+  const mime = (parts[0].match(/data:(.*?);base64/) || [])[1] || 'image/jpeg';
+  const bin = atob(parts[1] || '');
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
 }
 
-function extractFromText(text) {
-  const out = [];
-  for (const m of text.matchAll(/!\[[^\]]*\]\(\s*([^)\s]+)\s*\)/g)) out.push(m[1]);
-  for (const m of text.matchAll(/data:image\/[a-zA-Z+]+;base64,[A-Za-z0-9+/=]+/g)) out.push(m[0]);
-  if (!out.length) {
-    for (const m of text.matchAll(/https?:\/\/[^\s"'<>)]+\.(?:png|jpe?g|webp|gif)(?:\?[^\s"'<>)]*)?/gi)) out.push(m[0]);
-  }
-  return out;
-}
-
-function extractImagesFromChat(data) {
-  const msg = data.choices?.[0]?.message || {};
-  const urls = [];
-  (msg.images || []).forEach(i => urls.push(i.image_url?.url || i.url));
-  const c = msg.content;
-  if (Array.isArray(c)) {
-    c.forEach(p => {
-      if (p.type === 'image_url') urls.push(p.image_url?.url);
-      if (p.type === 'text' && p.text) urls.push(...extractFromText(p.text));
+// 有参考图时走图片编辑接口（/images/edits）：提示词 + 参考图一起发给模型
+async function genByEdits(provider, prompt, model, size, n, refUrls, onProgress) {
+  let url = provider.url.replace(/\/+$/, '');
+  if (!/\/v\d+$/.test(url)) url += '/v1';
+  const results = await Promise.allSettled(Array.from({ length: n }, () => {
+    const form = new FormData();
+    form.append('model', model);
+    form.append('prompt', prompt);
+    form.append('n', '1');
+    if (size && size !== 'auto') form.append('size', size);
+    if (selectedQuality) form.append('quality', selectedQuality);
+    refUrls.forEach((u, i) => form.append('image', dataUrlToBlob(u), `ref-${i + 1}.jpg`));
+    return fetchJsonWithProgress(url + '/images/edits', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + provider.key },
+      body: form
+    }, (loaded, total) => {
+      if (total > 0 && onProgress) onProgress(Math.min(99, Math.round(loaded / total * 99)));
     });
-  } else if (typeof c === 'string') {
-    urls.push(...extractFromText(c));
-  }
-  return [...new Set(urls.filter(Boolean))];
-}
-
-async function genByChat(provider, prompt, model, n) {
-  const results = await Promise.allSettled(Array.from({ length: n }, () =>
-    request(provider, '/chat/completions', { model, messages: [{ role: 'user', content: prompt }] })));
-  
+  }));
   const urls = [], errors = [];
   results.forEach(r => {
     if (r.status === 'fulfilled') {
-      const imgs = extractImagesFromChat(r.value);
-      if (imgs.length) urls.push(...imgs);
-      else errors.push('没有找到图片');
+      const items = (r.value.data || []).map(d => d.url || (d.b64_json ? 'data:image/png;base64,' + d.b64_json : null)).filter(Boolean);
+      if (items.length) urls.push(...items);
+      else errors.push('没有返回图片');
     } else errors.push(r.reason.message);
   });
-  
   if (!urls.length) throw new Error(errors.join('\n'));
   return urls;
 }
@@ -1183,7 +1163,9 @@ $('genBtn').onclick = async () => {
   try {
     const useRef = refImages.length > 0;
     const urls = useRef
-      ? await genByChatWithRefs(provider, prompt, model, n, refImages.map(r => r.dataUrl))
+      ? await genByEdits(provider, prompt, model, selectedSize, n, refImages.map(r => r.dataUrl), (p) => {
+          if (p > genProgressValue) setGenProgress(p);
+        })
       : await genByImages(provider, prompt, model, selectedSize, n, (p) => {
           // 有真实下载数据时按数据走（同样封顶 99）
           if (p > genProgressValue) setGenProgress(p);
