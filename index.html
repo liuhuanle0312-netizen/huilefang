@@ -17,6 +17,26 @@
     --accent-hover: #1d4ed8;
     --danger: #dc2626;
     --ok: #16a34a;
+    --soft: #f3f4f6;
+    --soft-hover: #e5e7eb;
+    --softest: #f9fafb;
+    --viewer-bg: rgba(255,255,255,.92);
+  }
+  html.dark {
+    --bg: #111827;
+    --panel: #1f2937;
+    --text: #f3f4f6;
+    --sub: #9ca3af;
+    --line: #374151;
+    --input: #111827;
+    --accent: #3b82f6;
+    --accent-hover: #2563eb;
+    --danger: #f87171;
+    --ok: #4ade80;
+    --soft: #374151;
+    --soft-hover: #4b5563;
+    --softest: #111827;
+    --viewer-bg: rgba(0,0,0,.88);
   }
   * { box-sizing: border-box; }
   body { margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); }
@@ -32,12 +52,12 @@
   .check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--sub); margin-top: 8px; }
   .check input { width: auto; accent-color: var(--accent); }
   button { padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; background: var(--panel); color: var(--text); font-size: 13px; font-weight: 500; transition: background-color .15s, border-color .15s, transform .1s; }
-  button:hover { background: #f3f4f6; }
+  button:hover { background: var(--soft); }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; width: 100%; margin-top: 12px; padding: 12px; font-size: 15px; font-weight: 600; border-radius: 8px; }
   button.primary:hover { background: var(--accent-hover); }
   button.primary:active { transform: scale(.98); }
-  button.secondary { background: #f3f4f6; border-color: var(--line); color: var(--text); }
-  button.secondary:hover { background: #e5e7eb; }
+  button.secondary { background: var(--soft); border-color: var(--line); color: var(--text); }
+  button.secondary:hover { background: var(--soft-hover); }
   button:disabled { opacity: .5; cursor: not-allowed; }
   button.link { background: none; border: none; color: var(--accent); padding: 0; font-size: 12px; }
   button.link:hover { text-decoration: underline; }
@@ -71,7 +91,7 @@
   main { padding: 20px; overflow-y: auto; }
 
   .provider-list { margin-top: 16px; }
-  .provider-card { background: #f9fafb; border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin-bottom: 8px; }
+  .provider-card { background: var(--softest); border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin-bottom: 8px; }
   .provider-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
   .provider-name { font-weight: 500; color: var(--text); }
   .provider-info { font-size: 12px; color: var(--sub); line-height: 1.5; }
@@ -103,12 +123,12 @@
   .select-box-options { position: absolute; top: 100%; left: 0; right: 0; background: var(--panel); border: 1px solid var(--line); border-top: none; border-radius: 0 0 6px 6px; z-index: 10; max-height: 200px; overflow-y: auto; box-shadow: 0 4px 6px rgba(0,0,0,.1); }
   .select-box-option { padding: 10px; cursor: pointer; border-bottom: 1px solid var(--line); font-size: 13px; }
   .select-box-option:last-child { border-bottom: none; }
-  .select-box-option:hover { background: #f3f4f6; }
+  .select-box-option:hover { background: var(--soft); }
   .select-box-option.active { background: rgba(37, 99, 235, 0.1); color: var(--accent); font-weight: 500; }
 
   .ref-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 8px; }
   .ref-grid:empty { display: none; }
-  .ref-thumb { position: relative; aspect-ratio: 1; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); background: #f3f4f6; }
+  .ref-thumb { position: relative; aspect-ratio: 1; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); background: var(--soft); }
   .ref-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .ref-remove { position: absolute; top: 2px; right: 2px; width: 20px; height: 20px; padding: 0; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; border: none; font-size: 12px; line-height: 1; }
   #status { margin: 0 0 16px; }
@@ -116,20 +136,20 @@
   .gallery { display: grid; grid-template-columns: 1fr; gap: 12px; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.04); transition: box-shadow .15s; }
   .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); }
-  .card img { max-width: 100%; max-height: 160px; width: auto; height: auto; display: block; margin: 0 auto; cursor: zoom-in; background: #f3f4f6; }
-  .card .broken { padding: 40px 10px; text-align: center; color: var(--sub); font-size: 13px; background: #f3f4f6; }
+  .card img { max-width: 100%; max-height: 160px; width: auto; height: auto; display: block; margin: 0 auto; cursor: zoom-in; background: var(--soft); }
+  .card .broken { padding: 40px 10px; text-align: center; color: var(--sub); font-size: 13px; background: var(--soft); }
   .card .meta { padding: 8px; font-size: 11px; color: var(--sub); }
   .card .prompt { color: var(--text); margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .card .actions { display: flex; gap: 6px; flex-wrap: wrap; }
-  .card .actions a, .card .actions button { font-size: 12px; padding: 5px 10px; border-radius: 4px; background: #f3f4f6; color: var(--text); text-decoration: none; border: 1px solid var(--line); cursor: pointer; }
-  .card .actions a:hover, .card .actions button:hover { background: #e5e7eb; }
-  #refAddBtn { border-style: dashed; background: #fafafa; padding: 10px; }
+  .card .actions a, .card .actions button { font-size: 12px; padding: 5px 10px; border-radius: 4px; background: var(--soft); color: var(--text); text-decoration: none; border: 1px solid var(--line); cursor: pointer; }
+  .card .actions a:hover, .card .actions button:hover { background: var(--soft-hover); }
+  #refAddBtn { border-style: dashed; background: var(--softest); padding: 10px; }
   #refAddBtn:hover { border-color: var(--accent); color: var(--accent); background: rgba(37, 99, 235, 0.05); }
   .card .actions .danger { color: var(--danger); }
   .empty { color: var(--sub); text-align: center; margin-top: 80px; }
   #loadMore { display: block; margin: 20px auto; }
 
-  #viewer { position: fixed; inset: 0; background: rgba(255,255,255,.92); display: none; align-items: center; justify-content: center; z-index: 10; cursor: zoom-out; }
+  #viewer { position: fixed; inset: 0; background: var(--viewer-bg); display: none; align-items: center; justify-content: center; z-index: 10; cursor: zoom-out; }
   #viewer img { max-width: 95vw; max-height: 95vh; box-shadow: 0 4px 24px rgba(0,0,0,.15); }
 
   .modal { position: fixed; inset: 0; background: rgba(0,0,0,.3); display: none; align-items: center; justify-content: center; z-index: 20; }
@@ -206,6 +226,7 @@
         <button id="btnGenerate" class="secondary">图片生成</button>
       </div>
       <div class="topbar-right">
+        <button id="themeToggle" class="secondary" title="深色模式" style="padding: 6px 10px;">🌙</button>
         <button id="avatarBtn" class="avatar-btn" title="个人资料"></button>
       </div>
     </div>
@@ -328,7 +349,7 @@
             </div>
           </div>
 
-          <div id="genProgressWrap" class="hidden" style="margin-bottom: 12px; padding: 12px; background: #f3f4f6; border-radius: 6px;">
+          <div id="genProgressWrap" class="hidden" style="margin-bottom: 12px; padding: 12px; background: var(--soft); border-radius: 6px;">
             <div style="font-size: 13px; color: var(--text); margin-bottom: 6px;">
               <span id="genProgressPercent">0%</span> · <span id="genProgressTime">0 秒</span>
             </div>
@@ -345,7 +366,7 @@
       <!-- 主内容区 -->
       <main id="mainContent">
         <div class="msg" id="status"></div>
-        <div class="section-title">历史图片</div>
+        <div class="section-title">历史图片 <span id="historyCount" style="font-size: 13px; font-weight: 400; color: var(--sub);"></span></div>
         <div class="gallery" id="gallery"></div>
         <div class="empty" id="empty">还没有生成记录</div>
         <button id="loadMore" class="hidden">加载更多</button>
@@ -392,7 +413,7 @@
     <input id="profileNickname" placeholder="输入你的昵称">
     
     <label>邮箱</label>
-    <input id="profileEmail" type="email" readonly style="background: #f3f4f6; cursor: not-allowed;">
+    <input id="profileEmail" type="email" readonly style="background: var(--soft); cursor: not-allowed;">
     
     <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line);">
       <button class="primary" id="saveProfileBtn">保存</button>
@@ -409,6 +430,20 @@ const SUPABASE_KEY = 'sb_publishable_ZTfPpyiMKJLe9POArBS4OQ_Akd8SPQu';
 const $ = id => document.getElementById(id);
 const PAGE_SIZE = 30;
 const SIGNED_URL_TTL = 604800; // 7 天，之前只有 1 小时，过期就是历史图有时显示“图片已失效”的原因
+
+// 深色模式：存在本机，打开即恢复
+function applyTheme() {
+  const dark = localStorage.getItem('imggen-theme') === 'dark';
+  document.documentElement.classList.toggle('dark', dark);
+  const t = $('themeToggle');
+  if (t) t.textContent = dark ? '☀️' : '🌙';
+}
+$('themeToggle').onclick = () => {
+  const dark = !document.documentElement.classList.contains('dark');
+  localStorage.setItem('imggen-theme', dark ? 'dark' : 'light');
+  applyTheme();
+};
+applyTheme();
 
 let sb, currentUser = null, recovering = false, signupMode = false, historyOffset = 0;
 let providers = {};
@@ -520,6 +555,7 @@ function enterApp(user) {
   show('viewApp');
   showTab('providers');
   loadHistory();
+  updateHistoryCount();
 }
 
 function showTab(tab) {
@@ -1161,6 +1197,13 @@ async function saveRecord(src, meta) {
   return { record: data, displayUrl: src, warn };
 }
 
+async function updateHistoryCount() {
+  const el = $('historyCount');
+  if (!el || !currentUser) return;
+  const { count } = await sb.from('generations').select('id', { count: 'exact', head: true });
+  if (count != null) el.textContent = `共 ${count} 张`;
+}
+
 async function loadHistory() {
   $('loadMore').disabled = true;
   const { data, error } = await sb.from('generations').select('*')
@@ -1234,7 +1277,8 @@ function addCard(record, src, atTop) {
   const info = document.createElement('div');
   const time = new Date(record.created_at || Date.now());
   const secs = record.gen_seconds ? ` · ${record.gen_seconds}s` : '';
-  info.textContent = `${record.model || 'unknown'} · ${time.toLocaleString()}${secs}`;
+  const sizeText = record.size ? (record.size === 'auto' ? '自动尺寸' : record.size) : '';
+  info.textContent = [record.model || 'unknown', sizeText, `${time.toLocaleString()}${secs}`].filter(Boolean).join(' · ');
   info.style.marginBottom = '8px';
 
   const actions = document.createElement('div');
@@ -1297,6 +1341,7 @@ function addCard(record, src, atTop) {
       if (error) return setStatus('删除失败', true);
       card.remove();
       updateEmpty();
+      updateHistoryCount();
     };
     actions.append(del);
   }
@@ -1369,7 +1414,7 @@ $('genBtn').onclick = async () => {
 
     const warns = new Set(), errs = [];
     const saves = urls.map(async (u) => {
-      const meta = { prompt, model, mode: useRef ? 'images-ref' : 'images', gen_seconds: totalTime };
+      const meta = { prompt, model, mode: useRef ? 'images-ref' : 'images', size: selectedSize, gen_seconds: totalTime };
       // 生成完立刻在下面显示图片，不等上传存库
       const placeholder = addCard({ ...meta, created_at: new Date().toISOString() }, u, true);
       historyOffset++;
@@ -1389,6 +1434,7 @@ $('genBtn').onclick = async () => {
       }
     });
     await Promise.all(saves);
+    updateHistoryCount();
 
     if (errs.length) {
       setMsg($('genMsg'), `有 ${errs.length} 张保存失败`, 'error');
