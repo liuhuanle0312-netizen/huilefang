@@ -95,6 +95,17 @@
   .provider-tools { margin-top: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .provider-tools button { padding: 4px 10px; font-size: 12px; }
   .swipe-hint { text-align: center; font-size: 11px; color: var(--sub); padding: 2px 0; }
+  .stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 12px 0; }
+  .stat-box { background: var(--softest); border: 1px solid var(--line); border-radius: 8px; padding: 12px 8px; text-align: center; }
+  .stat-num { font-size: 22px; font-weight: 700; }
+  .stat-label { font-size: 12px; color: var(--sub); margin-top: 4px; }
+  .admin-user { background: var(--softest); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+  .admin-user .row1 { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .role-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--soft); white-space: nowrap; }
+  .role-badge.super_admin { background: rgba(220, 38, 38, .12); color: var(--danger); }
+  .role-badge.admin { background: rgba(37, 99, 235, .12); color: var(--accent); }
+  .admin-act { padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .admin-gens img { width: 100%; max-height: 160px; object-fit: contain; border-radius: 6px; background: var(--soft); cursor: zoom-in; }
   .provider-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
   .provider-name { font-weight: 500; color: var(--text); }
   .provider-info { font-size: 12px; color: var(--sub); line-height: 1.5; }
@@ -227,6 +238,7 @@
         <button id="btnAbout" class="secondary">软件介绍</button>
         <button id="btnProviders" class="secondary active">模型接入</button>
         <button id="btnGenerate" class="secondary">图片生成</button>
+        <button id="btnAdmin" class="secondary hidden">管理后台</button>
       </div>
       <div class="topbar-right">
         <button id="themeToggle" class="secondary" title="深色模式" style="padding: 6px 10px;">🌙</button>
@@ -366,6 +378,22 @@
           <button class="primary" id="genBtn">生成</button>
           <div class="msg" id="genMsg"></div>
         </div>
+
+        <!-- 管理后台：按钮默认隐藏，只有管理员登录后才显示 -->
+        <div id="adminView" class="hidden">
+          <h1>管理后台</h1>
+          <div class="stat-grid">
+            <div class="stat-box"><div class="stat-num" id="statUsers">—</div><div class="stat-label">注册人数</div></div>
+            <div class="stat-box"><div class="stat-num" id="statOnline">—</div><div class="stat-label">当前在线</div></div>
+            <div class="stat-box"><div class="stat-num" id="statToday">—</div><div class="stat-label">今日生图</div></div>
+            <div class="stat-box"><div class="stat-num" id="statTotal">—</div><div class="stat-label">累计生图</div></div>
+          </div>
+          <button id="adminRefreshBtn" class="secondary" style="margin: 4px 0 12px;">刷新</button>
+          <h2>用户列表</h2>
+          <div id="adminUserList" style="font-size: 13px;"></div>
+          <h2>最近操作</h2>
+          <div id="adminActivityList" style="font-size: 13px;"></div>
+        </div>
       </aside>
 
       <!-- 主内容区 -->
@@ -451,6 +479,7 @@ $('themeToggle').onclick = () => {
 applyTheme();
 
 let sb, currentUser = null, recovering = false, signupMode = false, historyOffset = 0;
+let myRole = 'user';
 let providers = {};
 let selectedSize = 'auto', selectedQuality = 'medium', selectedFormat = 'auto', selectedTier = 0, genStartTime = null, genProgressTimer = null;
 let refImages = [];
@@ -561,15 +590,21 @@ function enterApp(user) {
   showTab('providers');
   loadHistory();
   updateHistoryCount();
+  checkAdminRole();
+  startPresence();
+  logActivity('login');
 }
 
 function showTab(tab) {
+  // 管理后台只有管理员能进，其他人点进来也跳回模型接入
+  if (tab === 'admin' && myRole !== 'admin' && myRole !== 'super_admin') tab = 'providers';
   currentTab = tab;
   $('aboutView').classList.toggle('hidden', tab !== 'about');
   $('providersView').classList.toggle('hidden', tab !== 'providers');
   $('generateView').classList.toggle('hidden', tab !== 'generate');
+  $('adminView').classList.toggle('hidden', tab !== 'admin');
   
-  const btns = { about: $('btnAbout'), providers: $('btnProviders'), generate: $('btnGenerate') };
+  const btns = { about: $('btnAbout'), providers: $('btnProviders'), generate: $('btnGenerate'), admin: $('btnAdmin') };
   Object.values(btns).forEach(b => b.classList.remove('active'));
   if (btns[tab]) btns[tab].classList.add('active');
 
@@ -581,14 +616,17 @@ function showTab(tab) {
   if (tab === 'generate') {
     updateModelList();
   }
+  if (tab === 'admin') {
+    loadAdmin();
+  }
 }
 
 $('btnAbout').onclick = () => showTab('about');
 $('btnProviders').onclick = () => showTab('providers');
 $('btnGenerate').onclick = () => showTab('generate');
+$('btnAdmin').onclick = () => showTab('admin');
 
-// 左右滑动切换页面：软件介绍 ↔ 模型接入 ↔ 图片生成
-const TAB_ORDER = ['about', 'providers', 'generate'];
+// 左右滑动切换页面：软件介绍 ↔ 模型接入 ↔ 图片生成（管理员还有管理后台）
 let currentTab = 'providers';
 let swipeStartX = 0, swipeStartY = 0, swipeStartEl = null;
 document.addEventListener('touchstart', e => {
@@ -608,10 +646,151 @@ document.addEventListener('touchend', e => {
   if ($('viewer').style.display === 'flex') return;
   if (document.querySelector('.modal.show')) return;
   if (el.closest && el.closest('input, textarea, select')) return;
-  const idx = TAB_ORDER.indexOf(currentTab);
-  const next = dx < 0 ? Math.min(idx + 1, TAB_ORDER.length - 1) : Math.max(idx - 1, 0);
-  if (next !== idx) showTab(TAB_ORDER[next]);
+  const tabs = ['about', 'providers', 'generate'];
+  if (!$('btnAdmin').classList.contains('hidden')) tabs.push('admin');
+  const idx = tabs.indexOf(currentTab);
+  const next = dx < 0 ? Math.min(idx + 1, tabs.length - 1) : Math.max(idx - 1, 0);
+  if (next !== idx) showTab(tabs[next]);
 }, { passive: true });
+
+// ---- 管理后台 ----
+// 登录后查自己的角色：没有档案就建一个（只写 id 和邮箱，角色默认 user，自己改不了自己的角色）；
+// 是管理员或最高管理者，就显示隐藏的管理后台按钮
+async function checkAdminRole() {
+  try {
+    const { data } = await sb.from('profiles').select('role').eq('id', currentUser.id).maybeSingle();
+    if (!data) {
+      await sb.from('profiles').insert({ id: currentUser.id, email: currentUser.email });
+      myRole = 'user';
+    } else {
+      myRole = data.role || 'user';
+    }
+  } catch (e) { myRole = 'user'; }
+  if (myRole === 'admin' || myRole === 'super_admin') $('btnAdmin').classList.remove('hidden');
+}
+
+// 在线人数：每个登录用户都加入 presence 频道，只报自己的 id；只有管理后台读这个数
+let presenceChannel = null;
+function startPresence() {
+  if (presenceChannel || !currentUser) return;
+  presenceChannel = sb.channel('online-users', { config: { presence: { key: currentUser.id } } });
+  presenceChannel.on('presence', { event: 'sync' }, () => updateOnlineCount());
+  presenceChannel.subscribe(async (status) => {
+    if (status === 'SUBSCRIBED') {
+      try { await presenceChannel.track({ online_at: new Date().toISOString() }); } catch (e) {}
+    }
+  });
+}
+function getOnlineCount() {
+  if (!presenceChannel) return 0;
+  return Object.keys(presenceChannel.presenceState()).length;
+}
+function updateOnlineCount() {
+  const el = $('statOnline');
+  if (el) el.textContent = getOnlineCount();
+}
+
+// 操作日志：登录、生图、删除（记失败也不影响正常用）
+async function logActivity(action, detail = '') {
+  if (!currentUser) return;
+  try {
+    await sb.from('activity_log').insert({ user_id: currentUser.id, email: currentUser.email, action, detail });
+  } catch (e) {}
+}
+
+async function getViewUrl(record) {
+  if (record.image_url) return record.image_url;
+  if (record.image_path) {
+    try {
+      const { data } = await sb.storage.from('images').createSignedUrl(record.image_path, SIGNED_URL_TTL);
+      return data ? data.signedUrl : '';
+    } catch (e) { return ''; }
+  }
+  return '';
+}
+
+async function loadAdmin() {
+  if (myRole !== 'admin' && myRole !== 'super_admin') return;
+  const { count: userCount } = await sb.from('profiles').select('id', { count: 'exact', head: true });
+  $('statUsers').textContent = userCount ?? '—';
+  const { count: totalGen } = await sb.from('generations').select('id', { count: 'exact', head: true });
+  $('statTotal').textContent = totalGen ?? '—';
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const { count: todayGen } = await sb.from('generations').select('id', { count: 'exact', head: true }).gte('created_at', today.toISOString());
+  $('statToday').textContent = todayGen ?? '—';
+  updateOnlineCount();
+
+  const { data: users } = await sb.from('profiles').select('id, email, role, created_at').order('created_at', { ascending: true });
+  const list = $('adminUserList');
+  list.innerHTML = '';
+  (users || []).forEach(u => {
+    const row = document.createElement('div');
+    row.className = 'admin-user';
+    const isSelf = u.id === currentUser.id;
+    const roleName = u.role === 'super_admin' ? '最高管理者' : u.role === 'admin' ? '管理员' : '用户';
+    row.innerHTML = `
+      <div class="row1">
+        <div><strong>${escapeHtml(u.email || u.id.slice(0, 8))}</strong> <span class="role-badge ${u.role}">${roleName}</span></div>
+        ${myRole === 'super_admin' && !isSelf && u.role !== 'super_admin' ? `<select class="role-select" title="下发权限">
+          <option value="user"${u.role === 'user' ? ' selected' : ''}>用户</option>
+          <option value="admin"${u.role === 'admin' ? ' selected' : ''}>管理员</option>
+        </select>` : ''}
+      </div>
+      <div style="color: var(--sub); margin-top: 4px;">注册：${new Date(u.created_at).toLocaleString()} · 生图：<span class="gen-count">…</span> 张</div>
+      <div style="margin-top: 6px;"><button class="secondary show-gens">生图记录</button></div>
+      <div class="admin-gens hidden"></div>`;
+    list.append(row);
+    sb.from('generations').select('id', { count: 'exact', head: true }).eq('user_id', u.id).then(({ count }) => {
+      const el = row.querySelector('.gen-count');
+      if (el) el.textContent = count ?? 0;
+    });
+    const sel = row.querySelector('.role-select');
+    if (sel) sel.onchange = async () => {
+      const { error } = await sb.from('profiles').update({ role: sel.value }).eq('id', u.id);
+      if (error) { setStatus('权限下发失败', true); sel.value = u.role; return; }
+      setStatus('已把 ' + (u.email || '') + ' 设为' + (sel.value === 'admin' ? '管理员' : '用户'));
+      loadAdmin();
+    };
+    const btn = row.querySelector('.show-gens');
+    const box = row.querySelector('.admin-gens');
+    btn.onclick = async () => {
+      if (!box.classList.contains('hidden')) { box.classList.add('hidden'); btn.textContent = '生图记录'; return; }
+      btn.textContent = '加载中…';
+      const { data: gens } = await sb.from('generations').select('id, prompt, model, size, image_path, image_url, created_at').eq('user_id', u.id).order('created_at', { ascending: false }).limit(20);
+      box.innerHTML = '';
+      if (!gens || gens.length === 0) box.innerHTML = '<div style="color: var(--sub); padding: 6px 0;">还没有生图记录</div>';
+      for (const g of gens || []) {
+        const url = await getViewUrl(g);
+        const item = document.createElement('div');
+        item.style.cssText = 'margin-top: 8px;';
+        item.innerHTML = `<div style="font-size: 12px; color: var(--sub);">${g.model || ''} · ${g.size || ''} · ${new Date(g.created_at).toLocaleString()}</div><div style="font-size: 12px; margin: 2px 0;">${escapeHtml(g.prompt || '')}</div>`;
+        if (url) {
+          const im = document.createElement('img');
+          im.src = url;
+          im.onclick = () => { $('viewer').querySelector('img').src = url; $('viewer').style.display = 'flex'; };
+          item.prepend(im);
+        }
+        box.append(item);
+      }
+      box.classList.remove('hidden');
+      btn.textContent = '收起记录';
+    };
+  });
+
+  const { data: acts } = await sb.from('activity_log').select('email, action, detail, created_at').order('created_at', { ascending: false }).limit(50);
+  const actBox = $('adminActivityList');
+  actBox.innerHTML = '';
+  const actionName = { login: '登录', generate: '生图', delete: '删除' };
+  (acts || []).forEach(a => {
+    const d = document.createElement('div');
+    d.className = 'admin-act';
+    d.textContent = `${new Date(a.created_at).toLocaleString()} · ${a.email || ''} · ${actionName[a.action] || a.action}${a.detail ? ' · ' + a.detail : ''}`;
+    actBox.append(d);
+  });
+  if (!acts || acts.length === 0) actBox.innerHTML = '<div style="color: var(--sub);">暂无操作记录</div>';
+}
+
+$('adminRefreshBtn').onclick = () => loadAdmin();
 
 // 上次使用的供应商和模型：每次打开默认恢复上次的选择
 const LAST_USED_KEY = 'imggen-last-used';
@@ -1453,6 +1632,7 @@ function addCard(record, src, atTop) {
       card.remove();
       updateEmpty();
       updateHistoryCount();
+      logActivity('delete', record.model || '');
     };
     actions.append(del);
   }
@@ -1546,6 +1726,7 @@ $('genBtn').onclick = async () => {
     });
     await Promise.all(saves);
     updateHistoryCount();
+    if (urls.length > 0) logActivity('generate', model + ' · ' + urls.length + ' 张');
 
     if (errs.length) {
       setMsg($('genMsg'), `有 ${errs.length} 张保存失败`, 'error');
