@@ -53,7 +53,7 @@
 
   .app-wrap { display: flex; flex-direction: column; min-height: 100vh; }
   
-  .brand-bar { background: var(--panel); border-bottom: 1px solid var(--line); padding: 16px 20px; font-size: 20px; font-weight: 700; color: var(--text); }
+  .brand-bar { background: var(--panel); padding: 16px 20px 4px; font-size: 20px; font-weight: 700; color: var(--text); }
 
   .topbar { background: var(--panel); border-bottom: 1px solid var(--line); padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
   .topbar-left { display: flex; align-items: center; gap: 8px; flex: 1; }
@@ -78,6 +78,16 @@
 
   .gen-section { margin-bottom: 20px; }
   .gen-label { font-size: 12px; color: var(--sub); margin-bottom: 6px; font-weight: 500; }
+  .ratio-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .ratio-card { border: 1px solid var(--line); border-radius: 8px; padding: 10px 4px 8px; text-align: center; cursor: pointer; background: var(--panel); }
+  .ratio-card:hover { border-color: var(--accent); }
+  .ratio-card.active { border-color: var(--accent); background: rgba(37, 99, 235, 0.08); color: var(--accent); }
+  .ratio-shape { width: 34px; height: 24px; margin: 0 auto 6px; border: 2px solid #6b7280; border-radius: 3px; }
+  .ratio-card.active .ratio-shape { border-color: var(--accent); }
+  .ratio-name { font-size: 13px; font-weight: 600; }
+  .ratio-sub { font-size: 11px; color: var(--sub); margin-top: 2px; }
+  .ratio-card.active .ratio-sub { color: var(--accent); }
+  select:has(option[value=""]:checked) { color: var(--sub); }
 
   .select-box { position: relative; }
   .select-box-trigger { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--input); color: var(--text); font-size: 14px; text-align: left; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
@@ -222,7 +232,7 @@
           <div class="gen-section">
             <div class="gen-label">模型</div>
             <select id="genModel">
-              <option value="">-- 请先选择供应商 --</option>
+              <option value="" disabled selected>选择模型</option>
             </select>
           </div>
 
@@ -232,27 +242,27 @@
           </div>
 
           <div class="gen-section">
-            <div class="gen-label">分辨率</div>
-            <div class="select-box">
-              <div class="select-box-trigger" id="sizeDisplay">1024×1024 <span>▼</span></div>
-              <div class="select-box-options" id="sizeOptions" style="display: none;">
-                <div class="select-box-option active" data-size="1024x1024">1024×1024</div>
-                <div class="select-box-option" data-size="1536x1024">1536×1024</div>
-                <div class="select-box-option" data-size="1024x1536">1024×1536</div>
-                <div class="select-box-option" data-size="1792x1024">1792×1024</div>
-                <div class="select-box-option" data-size="1024x1792">1024×1792</div>
-                <div class="select-box-option" data-size="512x512">512×512</div>
-              </div>
+            <div class="gen-label">比例 / 尺寸</div>
+            <div class="ratio-grid" id="sizeOptions">
+              <div class="ratio-card active" data-size="auto"><div class="ratio-shape" style="display:flex;align-items:center;justify-content:center;font-size:11px;border-style:dashed;">auto</div><div class="ratio-name">自动</div><div class="ratio-sub">模型决定</div></div>
+              <div class="ratio-card" data-size="1024x1024"><div class="ratio-shape" style="width:24px;height:24px;"></div><div class="ratio-name">1:1</div><div class="ratio-sub">方图</div></div>
+              <div class="ratio-card" data-size="1536x1024"><div class="ratio-shape" style="width:34px;height:23px;"></div><div class="ratio-name">3:2</div><div class="ratio-sub">插画 / 封面</div></div>
+              <div class="ratio-card" data-size="1024x1536"><div class="ratio-shape" style="width:23px;height:34px;"></div><div class="ratio-name">2:3</div><div class="ratio-sub">人像 / 海报</div></div>
+              <div class="ratio-card" data-size="1792x1024"><div class="ratio-shape" style="width:36px;height:20px;"></div><div class="ratio-name">16:9</div><div class="ratio-sub">宽屏</div></div>
+              <div class="ratio-card" data-size="1024x1792"><div class="ratio-shape" style="width:20px;height:36px;"></div><div class="ratio-name">9:16</div><div class="ratio-sub">竖屏 / 短视频</div></div>
+              <div class="ratio-card" data-size="1536x1152"><div class="ratio-shape" style="width:32px;height:24px;"></div><div class="ratio-name">4:3</div><div class="ratio-sub">经典横图</div></div>
+              <div class="ratio-card" data-size="1792x768"><div class="ratio-shape" style="width:38px;height:16px;"></div><div class="ratio-name">21:9</div><div class="ratio-sub">影院宽屏</div></div>
             </div>
           </div>
 
           <div class="gen-section">
-            <div class="gen-label">画质</div>
+            <div class="gen-label">质量</div>
             <div class="select-box">
-              <div class="select-box-trigger" id="qualityDisplay">标准 <span>▼</span></div>
+              <div class="select-box-trigger" id="qualityDisplay">中 <span>▼</span></div>
               <div class="select-box-options" id="qualityOptions" style="display: none;">
-                <div class="select-box-option active" data-quality="standard">标准</div>
-                <div class="select-box-option" data-quality="hd">高清</div>
+                <div class="select-box-option" data-quality="low">低</div>
+                <div class="select-box-option active" data-quality="medium">中</div>
+                <div class="select-box-option" data-quality="high">高</div>
               </div>
             </div>
           </div>
@@ -353,7 +363,7 @@ const SIGNED_URL_TTL = 3600;
 
 let sb, currentUser = null, recovering = false, signupMode = false, historyOffset = 0;
 let providers = {};
-let selectedSize = '1024x1024', selectedQuality = 'standard', genStartTime = null, genProgressTimer = null;
+let selectedSize = 'auto', selectedQuality = 'medium', genStartTime = null, genProgressTimer = null;
 const PROVIDER_STORE_KEY = 'imggen-providers';
 const PROFILE_STORE_KEY = 'imggen-profile';
 
@@ -587,7 +597,7 @@ function updateModelList() {
   const modelSel = $('genModel');
   
   if (!supplierId) {
-    modelSel.innerHTML = '<option value="">-- 请先选择供应商 --</option>';
+    modelSel.innerHTML = '<option value="" disabled selected>选择模型</option>';
     return;
   }
 
@@ -601,7 +611,7 @@ function updateModelList() {
   modelSel.disabled = true;
 
   fetchModels(provider).then(models => {
-    modelSel.innerHTML = '<option value="">-- 请选择 --</option>';
+    modelSel.innerHTML = '<option value="" disabled selected>选择模型</option>';
     if (models.length === 0) {
       modelSel.innerHTML = '<option value="">没有加载到模型</option>';
     } else {
@@ -641,19 +651,12 @@ function escapeHtml(text) {
   return text.replace(/[&<>"']/g, m => map[m]);
 }
 
-// 分辨率选择
-$('sizeDisplay').addEventListener('click', () => {
-  const opts = $('sizeOptions');
-  opts.style.display = opts.style.display === 'none' ? 'block' : 'none';
-});
-
-$('sizeOptions').querySelectorAll('.select-box-option').forEach(opt => {
-  opt.addEventListener('click', () => {
-    $('sizeOptions').querySelectorAll('.select-box-option').forEach(o => o.classList.remove('active'));
-    opt.classList.add('active');
-    selectedSize = opt.dataset.size;
-    $('sizeDisplay').innerHTML = opt.textContent + ' <span>▼</span>';
-    $('sizeOptions').style.display = 'none';
+// 比例选择
+$('sizeOptions').querySelectorAll('.ratio-card').forEach(card => {
+  card.addEventListener('click', () => {
+    $('sizeOptions').querySelectorAll('.ratio-card').forEach(o => o.classList.remove('active'));
+    card.classList.add('active');
+    selectedSize = card.dataset.size;
   });
 });
 
@@ -756,7 +759,6 @@ $('logoutBtn').onclick = () => sb.auth.signOut();
 
 document.addEventListener('click', (e) => {
   if (!e.target.closest('.select-box')) {
-    $('sizeOptions').style.display = 'none';
     $('qualityOptions').style.display = 'none';
   }
 });
@@ -783,8 +785,9 @@ async function request(provider, path, body) {
 }
 
 async function genByImages(provider, prompt, model, size, n) {
-  const params = { model, prompt, n, size };
-  if (selectedQuality === 'hd') params.quality = 'hd';
+  const params = { model, prompt, n };
+  if (size && size !== 'auto') params.size = size;
+  if (selectedQuality) params.quality = selectedQuality;
   const data = await request(provider, '/images/generations', params);
   return (data.data || []).map(d => d.url || (d.b64_json ? 'data:image/png;base64,' + d.b64_json : null)).filter(Boolean);
 }
