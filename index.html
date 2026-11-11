@@ -92,6 +92,9 @@
 
   .provider-list { margin-top: 16px; }
   .provider-card { background: var(--softest); border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin-bottom: 8px; }
+  .provider-tools { margin-top: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .provider-tools button { padding: 4px 10px; font-size: 12px; }
+  .swipe-hint { text-align: center; font-size: 11px; color: var(--sub); padding: 2px 0; }
   .provider-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
   .provider-name { font-weight: 500; color: var(--text); }
   .provider-info { font-size: 12px; color: var(--sub); line-height: 1.5; }
@@ -141,7 +144,7 @@
   .card .meta { padding: 8px; font-size: 11px; color: var(--sub); }
   .card .prompt { color: var(--text); margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .card .actions { display: flex; gap: 6px; flex-wrap: wrap; }
-  .card .actions a, .card .actions button { font-size: 12px; padding: 5px 10px; border-radius: 4px; background: var(--soft); color: var(--text); text-decoration: none; border: 1px solid var(--line); cursor: pointer; }
+  .card .actions a, .card .actions button { font-size: 14px; padding: 5px 8px; border-radius: 4px; background: var(--soft); color: var(--text); text-decoration: none; border: 1px solid var(--line); cursor: pointer; }
   .card .actions a:hover, .card .actions button:hover { background: var(--soft-hover); }
   #refAddBtn { border-style: dashed; background: var(--softest); padding: 10px; }
   #refAddBtn:hover { border-color: var(--accent); color: var(--accent); background: rgba(37, 99, 235, 0.05); }
@@ -230,6 +233,8 @@
         <button id="avatarBtn" class="avatar-btn" title="个人资料"></button>
       </div>
     </div>
+
+    <div class="swipe-hint">← 左右滑动切换页面 →</div>
 
     <div class="app-body" id="appBody">
       <!-- 侧栏 -->
@@ -559,6 +564,7 @@ function enterApp(user) {
 }
 
 function showTab(tab) {
+  currentTab = tab;
   $('aboutView').classList.toggle('hidden', tab !== 'about');
   $('providersView').classList.toggle('hidden', tab !== 'providers');
   $('generateView').classList.toggle('hidden', tab !== 'generate');
@@ -580,6 +586,32 @@ function showTab(tab) {
 $('btnAbout').onclick = () => showTab('about');
 $('btnProviders').onclick = () => showTab('providers');
 $('btnGenerate').onclick = () => showTab('generate');
+
+// 左右滑动切换页面：软件介绍 ↔ 模型接入 ↔ 图片生成
+const TAB_ORDER = ['about', 'providers', 'generate'];
+let currentTab = 'providers';
+let swipeStartX = 0, swipeStartY = 0, swipeStartEl = null;
+document.addEventListener('touchstart', e => {
+  if (e.touches.length !== 1) return;
+  swipeStartX = e.touches[0].clientX;
+  swipeStartY = e.touches[0].clientY;
+  swipeStartEl = e.target;
+}, { passive: true });
+document.addEventListener('touchend', e => {
+  if (!swipeStartEl) return;
+  const dx = e.changedTouches[0].clientX - swipeStartX;
+  const dy = e.changedTouches[0].clientY - swipeStartY;
+  const el = swipeStartEl;
+  swipeStartEl = null;
+  if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+  if ($('viewApp').classList.contains('hidden')) return;
+  if ($('viewer').style.display === 'flex') return;
+  if (document.querySelector('.modal.show')) return;
+  if (el.closest && el.closest('input, textarea, select')) return;
+  const idx = TAB_ORDER.indexOf(currentTab);
+  const next = dx < 0 ? Math.min(idx + 1, TAB_ORDER.length - 1) : Math.max(idx - 1, 0);
+  if (next !== idx) showTab(TAB_ORDER[next]);
+}, { passive: true });
 
 // 上次使用的供应商和模型：每次打开默认恢复上次的选择
 const LAST_USED_KEY = 'imggen-last-used';
@@ -636,6 +668,11 @@ function renderProviders() {
       </div>
       <div class="provider-info">
         <div>${escapeHtml(p.url)}</div>
+      </div>
+      <div class="provider-tools">
+        <button onclick="testProviderSpeed('${id}', this)">测速</button>
+        <button onclick="queryProviderBalance('${id}', this)">余额</button>
+        <span class="provider-status" style="font-size: 12px; color: var(--sub);"></span>
       </div>
     `;
     list.append(card);
@@ -755,6 +792,76 @@ async function fetchModels(provider) {
   if (data.error) throw new Error(data.error.message || 'API Error');
   
   return (data.data || []).map(m => m.id).sort();
+}
+
+// 供应商测速：调一次 /models 计时，显示毫秒数和通不通
+async function testProviderSpeed(id, btn) {
+  const p = providers[id];
+  const statusEl = btn.parentElement.querySelector('.provider-status');
+  if (!p || !p.key) { statusEl.textContent = 'Key 未保存，无法测速'; statusEl.style.color = 'var(--danger)'; return; }
+  statusEl.textContent = '测速中…';
+  statusEl.style.color = 'var(--sub)';
+  btn.disabled = true;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    let url = p.url.replace(/\/+$/, '');
+    if (!/\/v\d+$/.test(url)) url += '/v1';
+    const t0 = performance.now();
+    const res = await fetch(url + '/models', { headers: { 'Authorization': 'Bearer ' + p.key }, signal: ctrl.signal });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    await res.json();
+    const ms = Math.round(performance.now() - t0);
+    statusEl.textContent = ms + 'ms · 可用';
+    statusEl.style.color = 'var(--ok)';
+  } catch (e) {
+    statusEl.textContent = '不通' + (e.name === 'AbortError' ? '（超时）' : e.message ? '（' + e.message + '）' : '');
+    statusEl.style.color = 'var(--danger)';
+  } finally {
+    clearTimeout(timer);
+    btn.disabled = false;
+  }
+}
+
+// 供应商余额：试常见中转站（new-api 架构）查余额的地址，返回 {data:{quota, used_quota}}，500000 额度 = 1 美元；
+// 吉吉的接口实测 14 个常见地址都返回 404，不认余额查询，会显示“不支持查询”，余额去中转站网站看
+async function queryProviderBalance(id, btn) {
+  const p = providers[id];
+  const statusEl = btn.parentElement.querySelector('.provider-status');
+  if (!p || !p.key) { statusEl.textContent = 'Key 未保存，无法查询'; statusEl.style.color = 'var(--danger)'; return; }
+  statusEl.textContent = '查询中…';
+  statusEl.style.color = 'var(--sub)';
+  btn.disabled = true;
+  try {
+    let base = p.url.replace(/\/+$/, '');
+    if (!/\/v\d+$/.test(base)) base += '/v1';
+    const origin = new URL(base).origin;
+    const headers = { 'Authorization': 'Bearer ' + p.key };
+    for (const u of [origin + '/api/user/token', origin + '/api/user/self']) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      try {
+        const res = await fetch(u, { headers, signal: ctrl.signal });
+        if (!res.ok) continue;
+        const d = await res.json();
+        const q = d && d.data;
+        if (q && typeof q.quota === 'number') {
+          const left = (q.quota - (q.used_quota || 0)) / 500000;
+          statusEl.textContent = '余额约 $' + left.toFixed(2);
+          statusEl.style.color = 'var(--ok)';
+          return;
+        }
+      } catch (e) {}
+      finally { clearTimeout(timer); }
+    }
+    statusEl.textContent = '不支持查询，去中转站网站看余额';
+    statusEl.style.color = 'var(--sub)';
+  } catch (e) {
+    statusEl.textContent = '查询失败' + (e.message ? '（' + e.message + '）' : '');
+    statusEl.style.color = 'var(--danger)';
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 $('genSupplier').addEventListener('change', () => { pendingLastModel = null; updateModelList(); saveLastUsed(); });
@@ -1286,7 +1393,8 @@ function addCard(record, src, atTop) {
   
   if (src) {
     dl = document.createElement('a');
-    dl.textContent = '下载';
+    dl.textContent = '⬇️';
+    dl.title = '下载';
     dl.href = src;
     const dlExt = src.startsWith('data:image/jpeg') ? 'jpg' : src.startsWith('data:image/gif') ? 'gif' : src.startsWith('data:image/svg+xml') ? 'svg' : src.startsWith('data:image/webp') ? 'webp' : 'png';
     dl.download = `image-${record.id || Date.now()}.${dlExt}`;
@@ -1295,7 +1403,8 @@ function addCard(record, src, atTop) {
   }
   
   const reuse = document.createElement('button');
-  reuse.textContent = '复用提示词';
+  reuse.textContent = '📝';
+  reuse.title = '复用提示词';
   reuse.onclick = () => {
     $('genPrompt').value = record.prompt;
     showTab('generate');
@@ -1306,7 +1415,8 @@ function addCard(record, src, atTop) {
   // 继续改：把这张图直接加进参考图，接着改
   if (src) {
     const cont = document.createElement('button');
-    cont.textContent = '继续改';
+    cont.textContent = '✏️';
+    cont.title = '继续改';
     cont.onclick = async () => {
       if (refImages.length >= 5) return setStatus('参考图已满 5 张，先删一张再继续改', true);
       cont.disabled = true;
@@ -1324,7 +1434,7 @@ function addCard(record, src, atTop) {
         setStatus(err.message || '加入参考图失败', true);
       } finally {
         cont.disabled = false;
-        cont.textContent = '继续改';
+        cont.textContent = '✏️';
       }
     };
     actions.append(cont);
@@ -1332,7 +1442,8 @@ function addCard(record, src, atTop) {
 
   if (record.id) {
     const del = document.createElement('button');
-    del.textContent = '删除';
+    del.textContent = '🗑️';
+    del.title = '删除';
     del.className = 'danger';
     del.onclick = async () => {
       if (!confirm('确定删除吗？')) return;
