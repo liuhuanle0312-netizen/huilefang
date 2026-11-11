@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 图片生成</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #0f1115; color: #e6e6e6;
+  }
+  .wrap { display: grid; grid-template-columns: 340px 1fr; min-height: 100vh; }
+  aside { background: #171a21; padding: 20px; border-right: 1px solid #262a33; overflow-y: auto; }
+  main { padding: 20px; }
+  h1 { font-size: 18px; margin: 0 0 16px; }
+  h2 { font-size: 14px; color: #9aa3b2; margin: 20px 0 8px; font-weight: 600; }
+  label { display: block; font-size: 13px; color: #9aa3b2; margin: 10px 0 4px; }
+  input, select, textarea {
+    width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #2c313c;
+    background: #0f1115; color: #e6e6e6; font-size: 14px; font-family: inherit;
+  }
+  textarea { min-height: 120px; resize: vertical; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: #4f7cff; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  .check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #9aa3b2; margin-top: 8px; }
+  .check input { width: auto; }
+  button {
+    padding: 9px 14px; border: none; border-radius: 6px; cursor: pointer;
+    background: #2c313c; color: #e6e6e6; font-size: 14px;
+  }
+  button:hover { background: #363c49; }
+  button.primary { background: #4f7cff; color: #fff; width: 100%; margin-top: 14px; padding: 11px; font-size: 15px; }
+  button.primary:hover { background: #3d6af0; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .hint { font-size: 12px; color: #6b7384; margin-top: 4px; line-height: 1.5; }
+  #status { margin-bottom: 16px; font-size: 14px; color: #9aa3b2; min-height: 20px; white-space: pre-wrap; }
+  #status.error { color: #ff6b6b; }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+  .card { background: #171a21; border: 1px solid #262a33; border-radius: 8px; overflow: hidden; }
+  .card img { width: 100%; display: block; cursor: zoom-in; background: #0b0d10; }
+  .card .meta { padding: 10px; font-size: 12px; color: #9aa3b2; }
+  .card .prompt { color: #c9ced8; margin-bottom: 8px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .card .actions { display: flex; gap: 6px; }
+  .card .actions a, .card .actions button {
+    font-size: 12px; padding: 5px 10px; border-radius: 4px; background: #2c313c;
+    color: #e6e6e6; text-decoration: none; border: none; cursor: pointer;
+  }
+  .empty { color: #6b7384; text-align: center; margin-top: 80px; }
+  #viewer {
+    position: fixed; inset: 0; background: rgba(0,0,0,.9); display: none;
+    align-items: center; justify-content: center; z-index: 10; cursor: zoom-out;
+  }
+  #viewer img { max-width: 95vw; max-height: 95vh; }
+  @media (max-width: 800px) { .wrap { grid-template-columns: 1fr; } aside { border-right: none; border-bottom: 1px solid #262a33; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <aside>
+    <h1>AI 图片生成</h1>
+
+    <h2>接口设置</h2>
+    <label>中转站地址</label>
+    <input id="baseUrl" placeholder="https://api.example.com">
+    <div class="hint">地址末尾没有 /v1 时会自动补上</div>
+
+    <label>API Key</label>
+    <input id="apiKey" type="password" placeholder="sk-...">
+    <div class="check"><input type="checkbox" id="remember" checked><span>在本浏览器记住 Key</span></div>
+
+    <label>接口模式</label>
+    <select id="mode">
+      <option value="images">图片接口 /images/generations</option>
+      <option value="chat">对话接口 /chat/completions</option>
+    </select>
+
+    <label>模型</label>
+    <div class="row">
+      <input id="model" list="modelList" placeholder="dall-e-3 / gpt-image-1 ..." style="flex:3">
+      <button id="loadModels" style="flex:1">拉取</button>
+    </div>
+    <datalist id="modelList"></datalist>
+
+    <h2>生成参数</h2>
+    <label>提示词</label>
+    <textarea id="prompt" placeholder="描述你想要的画面"></textarea>
+
+    <div class="row">
+      <div>
+        <label>尺寸</label>
+        <select id="size">
+          <option value="1024x1024">1024×1024</option>
+          <option value="1792x1024">1792×1024 横</option>
+          <option value="1024x1792">1024×1792 竖</option>
+          <option value="1536x1024">1536×1024 横</option>
+          <option value="1024x1536">1024×1536 竖</option>
+          <option value="512x512">512×512</option>
+        </select>
+      </div>
+      <div>
+        <label>数量</label>
+        <input id="count" type="number" min="1" max="4" value="1">
+      </div>
+    </div>
+    <div class="hint">对话模式下尺寸不生效，数量按请求次数计算</div>
+
+    <button class="primary" id="generate">生成</button>
+    <div class="hint">快捷键：Ctrl / ⌘ + Enter</div>
+  </aside>
+
+  <main>
+    <div id="status"></div>
+    <div class="gallery" id="gallery"></div>
+    <div class="empty" id="empty">生成的图片会显示在这里</div>
+  </main>
+</div>
+
+<div id="viewer"><img></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const FIELDS = ['baseUrl', 'apiKey', 'mode', 'model', 'size', 'count'];
+const STORE_KEY = 'imggen-settings';
+
+// ---------- 设置的保存与读取 ----------
+function loadSettings() {
+  const s = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+  FIELDS.forEach(f => { if (s[f] !== undefined) $(f).value = s[f]; });
+  if (s.remember === false) $('remember').checked = false;
+}
+function saveSettings() {
+  const s = { remember: $('remember').checked };
+  FIELDS.forEach(f => s[f] = $(f).value);
+  if (!s.remember) delete s.apiKey;
+  localStorage.setItem(STORE_KEY, JSON.stringify(s));
+}
+FIELDS.concat('remember').forEach(f => $(f).addEventListener('change', saveSettings));
+
+// ---------- 请求 ----------
+function apiBase() {
+  let u = $('baseUrl').value.trim().replace(/\/+$/, '');
+  if (!u) throw new Error('请填写中转站地址');
+  if (!/\/v\d+$/.test(u)) u += '/v1';
+  return u;
+}
+
+async function request(path, body) {
+  const key = $('apiKey').value.trim();
+  if (!key) throw new Error('请填写 API Key');
+  const res = await fetch(apiBase() + path, {
+    method: body ? 'POST' : 'GET',
+    headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); }
+  catch { throw new Error(`HTTP ${res.status}，返回的不是 JSON：\n${text.slice(0, 300)}`); }
+  if (!res.ok || data.error) {
+    const msg = data.error?.message || data.message || JSON.stringify(data).slice(0, 300);
+    throw new Error(`HTTP ${res.status}：${msg}`);
+  }
+  return data;
+}
+
+// 图片接口：返回 data[].url 或 data[].b64_json
+async function genByImages(prompt, model, size, n) {
+  const data = await request('/images/generations', { model, prompt, n, size });
+  return (data.data || []).map(d =>
+    d.url || (d.b64_json ? 'data:image/png;base64,' + d.b64_json : null)
+  ).filter(Boolean);
+}
+
+// 对话接口：从回复里提取图片
+function extractImagesFromChat(data) {
+  const msg = data.choices?.[0]?.message || {};
+  const urls = [];
+  // 1) message.images 字段（OpenRouter 等平台的格式）
+  (msg.images || []).forEach(i => urls.push(i.image_url?.url || i.url));
+  // 2) content 是数组的情况
+  const content = msg.content;
+  if (Array.isArray(content)) {
+    content.forEach(p => {
+      if (p.type === 'image_url') urls.push(p.image_url?.url);
+      if (p.type === 'text' && p.text) urls.push(...extractFromText(p.text));
+    });
+  } else if (typeof content === 'string') {
+    urls.push(...extractFromText(content));
+  }
+  return [...new Set(urls.filter(Boolean))];
+}
+function extractFromText(text) {
+  const out = [];
+  for (const m of text.matchAll(/!\[[^\]]*\]\(\s*([^)\s]+)\s*\)/g)) out.push(m[1]);
+  for (const m of text.matchAll(/data:image\/[a-zA-Z+]+;base64,[A-Za-z0-9+/=]+/g)) out.push(m[0]);
+  if (!out.length) {
+    for (const m of text.matchAll(/https?:\/\/[^\s"'<>)]+\.(?:png|jpe?g|webp|gif)(?:\?[^\s"'<>)]*)?/gi)) out.push(m[0]);
+  }
+  return out;
+}
+
+async function genByChat(prompt, model, n) {
+  const tasks = Array.from({ length: n }, () =>
+    request('/chat/completions', { model, messages: [{ role: 'user', content: prompt }] })
+  );
+  const results = await Promise.allSettled(tasks);
+  const urls = [], errors = [];
+  results.forEach(r => {
+    if (r.status === 'fulfilled') {
+      const imgs = extractImagesFromChat(r.value);
+      if (imgs.length) urls.push(...imgs);
+      else errors.push('回复里没有找到图片：' + JSON.stringify(r.value.choices?.[0]?.message?.content || r.value).slice(0, 200));
+    } else errors.push(r.reason.message);
+  });
+  if (!urls.length) throw new Error(errors.join('\n'));
+  return urls;
+}
+
+// ---------- 界面 ----------
+function setStatus(text, isError = false) {
+  $('status').textContent = text;
+  $('status').className = isError ? 'error' : '';
+}
+
+function addCard(src, prompt, model) {
+  $('empty').style.display = 'none';
+  const card = document.createElement('div');
+  card.className = 'card';
+
+  const img = document.createElement('img');
+  img.src = src;
+  img.onclick = () => { $('viewer').querySelector('img').src = src; $('viewer').style.display = 'flex'; };
+
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  const p = document.createElement('div');
+  p.className = 'prompt';
+  p.textContent = prompt;            // 用 textContent，避免把提示词当 HTML 解析
+  const info = document.createElement('div');
+  info.textContent = `${model} · ${new Date().toLocaleTimeString()}`;
+  info.style.marginBottom = '8px';
+
+  const actions = document.createElement('div');
+  actions.className = 'actions';
+  const dl = document.createElement('a');
+  dl.textContent = '下载';
+  dl.href = src;
+  dl.download = `image-${Date.now()}.png`;
+  dl.target = '_blank';
+  const reuse = document.createElement('button');
+  reuse.textContent = '复用提示词';
+  reuse.onclick = () => { $('prompt').value = prompt; $('prompt').focus(); };
+  actions.append(dl, reuse);
+
+  meta.append(p, info, actions);
+  card.append(img, meta);
+  $('gallery').prepend(card);
+}
+
+$('viewer').onclick = () => $('viewer').style.display = 'none';
+
+$('generate').onclick = async () => {
+  const prompt = $('prompt').value.trim();
+  const model = $('model').value.trim();
+  const mode = $('mode').value;
+  const size = $('size').value;
+  const n = Math.min(Math.max(parseInt($('count').value) || 1, 1), 4);
+  if (!prompt) return setStatus('请输入提示词', true);
+  if (!model) return setStatus('请填写模型名', true);
+
+  saveSettings();
+  const btn = $('generate');
+  btn.disabled = true;
+  const start = Date.now();
+  const timer = setInterval(() => setStatus(`生成中… ${((Date.now() - start) / 1000).toFixed(0)} 秒`), 500);
+
+  try {
+    const urls = mode === 'images'
+      ? await genByImages(prompt, model, size, n)
+      : await genByChat(prompt, model, n);
+    if (!urls.length) throw new Error('接口返回成功，但没有图片数据');
+    urls.forEach(u => addCard(u, prompt, model));
+    setStatus(`完成，${urls.length} 张，用时 ${((Date.now() - start) / 1000).toFixed(1)} 秒`);
+  } catch (e) {
+    let msg = e.message;
+    if (e instanceof TypeError) msg += '\n可能是网络问题，或中转站不允许浏览器直接跨域访问（CORS）。';
+    setStatus('出错了：' + msg, true);
+  } finally {
+    clearInterval(timer);
+    btn.disabled = false;
+  }
+};
+
+$('prompt').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('generate').click();
+});
+
+$('loadModels').onclick = async () => {
+  try {
+    setStatus('正在拉取模型列表…');
+    const data = await request('/models');
+    const ids = (data.data || []).map(m => m.id).sort();
+    $('modelList').innerHTML = '';
+    ids.forEach(id => { const o = document.createElement('option'); o.value = id; $('modelList').append(o); });
+    setStatus(`拉取到 ${ids.length} 个模型，点模型输入框可以选择`);
+  } catch (e) {
+    setStatus('拉取模型失败：' + e.message, true);
+  }
+};
+
+loadSettings();
+</script>
+</body>
+</html>
