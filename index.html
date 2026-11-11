@@ -24,17 +24,18 @@
   h1 { font-size: 18px; margin: 0 0 16px; font-weight: 600; }
   h2 { font-size: 14px; color: var(--sub); margin: 20px 0 8px; font-weight: 600; }
   label { display: block; font-size: 13px; color: var(--sub); margin: 10px 0 4px; font-weight: 500; }
-  input, select, textarea { width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--input); color: var(--text); font-size: 14px; font-family: inherit; }
+  input, select, textarea { width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--input); color: var(--text); font-size: 14px; font-family: inherit; transition: border-color .15s, box-shadow .15s; }
   textarea { min-height: 100px; resize: vertical; }
-  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1); }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15); }
   .row { display: flex; gap: 8px; }
   .row > * { flex: 1; }
   .check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--sub); margin-top: 8px; }
   .check input { width: auto; accent-color: var(--accent); }
-  button { padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; background: var(--panel); color: var(--text); font-size: 13px; font-weight: 500; }
+  button { padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; background: var(--panel); color: var(--text); font-size: 13px; font-weight: 500; transition: background-color .15s, border-color .15s, transform .1s; }
   button:hover { background: #f3f4f6; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; width: 100%; margin-top: 12px; padding: 10px; font-size: 14px; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; width: 100%; margin-top: 12px; padding: 12px; font-size: 15px; font-weight: 600; border-radius: 8px; }
   button.primary:hover { background: var(--accent-hover); }
+  button.primary:active { transform: scale(.98); }
   button.secondary { background: #f3f4f6; border-color: var(--line); color: var(--text); }
   button.secondary:hover { background: #e5e7eb; }
   button:disabled { opacity: .5; cursor: not-allowed; }
@@ -80,13 +81,13 @@
   .gen-section { margin-bottom: 20px; }
   .gen-label { font-size: 12px; color: var(--sub); margin-bottom: 6px; font-weight: 500; }
   .ratio-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-  .ratio-card { border: 1px solid var(--line); border-radius: 8px; padding: 10px 4px 8px; text-align: center; cursor: pointer; background: var(--panel); }
+  .ratio-card { border: 1px solid var(--line); border-radius: 8px; padding: 10px 4px 8px; text-align: center; cursor: pointer; background: var(--panel); transition: border-color .15s, background-color .15s; }
   .ratio-card:hover { border-color: var(--accent); }
   .ratio-card.active { border-color: var(--accent); background: rgba(37, 99, 235, 0.08); color: var(--accent); }
   .ratio-shape-wrap { height: 40px; display: flex; align-items: center; justify-content: center; margin-bottom: 6px; }
   .ratio-shape { width: 34px; height: 24px; margin: 0; border: 2px solid #6b7280; border-radius: 3px; }
   .tier-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-  .tier-chip { border: 1px solid var(--line); border-radius: 8px; padding: 10px 2px; text-align: center; cursor: pointer; background: var(--panel); font-size: 12px; color: var(--text); }
+  .tier-chip { border: 1px solid var(--line); border-radius: 8px; padding: 10px 2px; text-align: center; cursor: pointer; background: var(--panel); font-size: 12px; color: var(--text); transition: border-color .15s, background-color .15s; }
   .tier-chip:hover { border-color: var(--accent); }
   .tier-chip.active { border-color: var(--accent); background: rgba(37, 99, 235, 0.08); color: var(--accent); font-weight: 600; }
   .select-box-trigger.disabled { opacity: .45; cursor: not-allowed; }
@@ -113,13 +114,17 @@
   #status { margin: 0 0 16px; }
   .section-title { font-size: 16px; font-weight: 600; color: var(--text); margin: 4px 0 12px; }
   .gallery { display: grid; grid-template-columns: 1fr; gap: 12px; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.04); transition: box-shadow .15s; }
+  .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); }
   .card img { max-width: 100%; max-height: 160px; width: auto; height: auto; display: block; margin: 0 auto; cursor: zoom-in; background: #f3f4f6; }
   .card .broken { padding: 40px 10px; text-align: center; color: var(--sub); font-size: 13px; background: #f3f4f6; }
   .card .meta { padding: 8px; font-size: 11px; color: var(--sub); }
   .card .prompt { color: var(--text); margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .card .actions { display: flex; gap: 6px; flex-wrap: wrap; }
   .card .actions a, .card .actions button { font-size: 12px; padding: 5px 10px; border-radius: 4px; background: #f3f4f6; color: var(--text); text-decoration: none; border: 1px solid var(--line); cursor: pointer; }
+  .card .actions a:hover, .card .actions button:hover { background: #e5e7eb; }
+  #refAddBtn { border-style: dashed; background: #fafafa; padding: 10px; }
+  #refAddBtn:hover { border-color: var(--accent); color: var(--accent); background: rgba(37, 99, 235, 0.05); }
   .card .actions .danger { color: var(--danger); }
   .empty { color: var(--sub); text-align: center; margin-top: 80px; }
   #loadMore { display: block; margin: 20px auto; }
@@ -259,7 +264,6 @@
             <input type="file" id="refImageInput" accept="image/*" multiple style="display: none;">
             <div class="ref-grid" id="refGrid"></div>
             <button class="secondary" id="refAddBtn" style="width: 100%; margin-top: 8px;">＋ 添加参考图</button>
-            <div class="hint">参考图会一起发给模型做参考；有参考图时走图片编辑接口生成。</div>
           </div>
 
           <div class="gen-section">
@@ -541,11 +545,29 @@ $('btnAbout').onclick = () => showTab('about');
 $('btnProviders').onclick = () => showTab('providers');
 $('btnGenerate').onclick = () => showTab('generate');
 
+// 上次使用的供应商和模型：每次打开默认恢复上次的选择
+const LAST_USED_KEY = 'imggen-last-used';
+let pendingLastModel = null;
+function saveLastUsed() {
+  const supplierId = $('genSupplier').value;
+  if (!supplierId || !currentUser) return;
+  localStorage.setItem(LAST_USED_KEY + '-' + currentUser.id, JSON.stringify({ supplier: supplierId, model: $('genModel').value || '' }));
+}
+function restoreLastUsedSupplier() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LAST_USED_KEY + '-' + currentUser.id) || 'null');
+    if (saved && saved.supplier && providers[saved.supplier]) {
+      $('genSupplier').value = saved.supplier;
+      pendingLastModel = saved.model || null;
+    }
+  } catch (e) {}
+}
 function loadProviders() {
   const saved = localStorage.getItem(PROVIDER_STORE_KEY + '-' + currentUser.id) || '{}';
   providers = JSON.parse(saved);
   renderProviders();
   updateSupplierOptions();
+  restoreLastUsedSupplier();
 }
 
 function saveProviders() {
@@ -659,6 +681,7 @@ function updateModelList() {
     return;
   }
 
+  const keepModel = modelSel.value || pendingLastModel;
   modelSel.innerHTML = '<option value="">正在加载…</option>';
   modelSel.disabled = true;
 
@@ -673,7 +696,9 @@ function updateModelList() {
         opt.textContent = m;
         modelSel.append(opt);
       });
+      if (keepModel && models.includes(keepModel)) modelSel.value = keepModel;
     }
+    pendingLastModel = null;
     modelSel.disabled = false;
   }).catch(e => {
     modelSel.innerHTML = '<option value="">加载失败</option>';
@@ -696,7 +721,8 @@ async function fetchModels(provider) {
   return (data.data || []).map(m => m.id).sort();
 }
 
-$('genSupplier').addEventListener('change', updateModelList);
+$('genSupplier').addEventListener('change', () => { pendingLastModel = null; updateModelList(); saveLastUsed(); });
+$('genModel').addEventListener('change', saveLastUsed);
 
 function escapeHtml(text) {
   const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
@@ -1339,6 +1365,7 @@ $('genBtn').onclick = async () => {
     genProgressTimer = null;
 
     setMsg($('genMsg'), `${urls.length} 张，${totalTime} 秒`, 'ok');
+    saveLastUsed();
 
     const warns = new Set(), errs = [];
     const saves = urls.map(async (u) => {
