@@ -83,7 +83,13 @@
   .ratio-card { border: 1px solid var(--line); border-radius: 8px; padding: 10px 4px 8px; text-align: center; cursor: pointer; background: var(--panel); }
   .ratio-card:hover { border-color: var(--accent); }
   .ratio-card.active { border-color: var(--accent); background: rgba(37, 99, 235, 0.08); color: var(--accent); }
-  .ratio-shape { width: 34px; height: 24px; margin: 0 auto 6px; border: 2px solid #6b7280; border-radius: 3px; }
+  .ratio-shape-wrap { height: 40px; display: flex; align-items: center; justify-content: center; margin-bottom: 6px; }
+  .ratio-shape { width: 34px; height: 24px; margin: 0; border: 2px solid #6b7280; border-radius: 3px; }
+  .tier-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .tier-chip { border: 1px solid var(--line); border-radius: 8px; padding: 10px 2px; text-align: center; cursor: pointer; background: var(--panel); font-size: 12px; color: var(--text); }
+  .tier-chip:hover { border-color: var(--accent); }
+  .tier-chip.active { border-color: var(--accent); background: rgba(37, 99, 235, 0.08); color: var(--accent); font-weight: 600; }
+  .select-box-trigger.disabled { opacity: .45; cursor: not-allowed; }
   .ratio-card.active .ratio-shape { border-color: var(--accent); }
   .ratio-name { font-size: 13px; font-weight: 600; }
   .ratio-sub { font-size: 11px; color: var(--sub); margin-top: 2px; }
@@ -258,27 +264,50 @@
           <div class="gen-section">
             <div class="gen-label">比例 / 尺寸</div>
             <div class="ratio-grid" id="sizeOptions">
-              <div class="ratio-card active" data-size="auto"><div class="ratio-shape" style="display:flex;align-items:center;justify-content:center;font-size:11px;border-style:dashed;">auto</div><div class="ratio-name">自动</div><div class="ratio-sub">模型决定</div></div>
-              <div class="ratio-card" data-size="1024x1024"><div class="ratio-shape" style="width:24px;height:24px;"></div><div class="ratio-name">1:1</div><div class="ratio-sub">方图</div></div>
-              <div class="ratio-card" data-size="1536x1024"><div class="ratio-shape" style="width:34px;height:23px;"></div><div class="ratio-name">3:2</div><div class="ratio-sub">插画 / 封面</div></div>
-              <div class="ratio-card" data-size="1024x1536"><div class="ratio-shape" style="width:23px;height:34px;"></div><div class="ratio-name">2:3</div><div class="ratio-sub">人像 / 海报</div></div>
-              <div class="ratio-card" data-size="1792x1024"><div class="ratio-shape" style="width:36px;height:20px;"></div><div class="ratio-name">16:9</div><div class="ratio-sub">宽屏</div></div>
-              <div class="ratio-card" data-size="1024x1792"><div class="ratio-shape" style="width:20px;height:36px;"></div><div class="ratio-name">9:16</div><div class="ratio-sub">竖屏 / 短视频</div></div>
-              <div class="ratio-card" data-size="1536x1152"><div class="ratio-shape" style="width:32px;height:24px;"></div><div class="ratio-name">4:3</div><div class="ratio-sub">经典横图</div></div>
-              <div class="ratio-card" data-size="1792x768"><div class="ratio-shape" style="width:38px;height:16px;"></div><div class="ratio-name">21:9</div><div class="ratio-sub">影院宽屏</div></div>
+              <div class="ratio-card active" data-ratio="auto"><div class="ratio-shape-wrap"><div class="ratio-shape" style="display:flex;align-items:center;justify-content:center;font-size:11px;border-style:dashed;">auto</div></div><div class="ratio-name">自动</div><div class="ratio-sub">模型决定</div></div>
+              <div class="ratio-card" data-ratio="1:1"><div class="ratio-shape-wrap"><div class="ratio-shape" style="width:24px;height:24px;"></div></div><div class="ratio-name">1:1</div><div class="ratio-sub">方图</div></div>
+              <div class="ratio-card" data-ratio="3:2"><div class="ratio-shape-wrap"><div class="ratio-shape" style="width:34px;height:23px;"></div></div><div class="ratio-name">3:2</div><div class="ratio-sub">插画 / 封面</div></div>
+              <div class="ratio-card" data-ratio="2:3"><div class="ratio-shape-wrap"><div class="ratio-shape" style="width:23px;height:34px;"></div></div><div class="ratio-name">2:3</div><div class="ratio-sub">人像 / 海报</div></div>
+              <div class="ratio-card" data-ratio="16:9"><div class="ratio-shape-wrap"><div class="ratio-shape" style="width:36px;height:20px;"></div></div><div class="ratio-name">16:9</div><div class="ratio-sub">宽屏</div></div>
+              <div class="ratio-card" data-ratio="9:16"><div class="ratio-shape-wrap"><div class="ratio-shape" style="width:20px;height:36px;"></div></div><div class="ratio-name">9:16</div><div class="ratio-sub">竖屏 / 短视频</div></div>
+              <div class="ratio-card" data-ratio="4:3"><div class="ratio-shape-wrap"><div class="ratio-shape" style="width:32px;height:24px;"></div></div><div class="ratio-name">4:3</div><div class="ratio-sub">经典横图</div></div>
+              <div class="ratio-card" data-ratio="21:9"><div class="ratio-shape-wrap"><div class="ratio-shape" style="width:38px;height:16px;"></div></div><div class="ratio-name">21:9</div><div class="ratio-sub">影院宽屏</div></div>
             </div>
           </div>
 
+          <div class="gen-section hidden" id="tierSection">
+            <div class="gen-label">画质</div>
+            <div class="tier-row" id="tierOptions"></div>
+          </div>
+
           <div class="gen-section">
-            <div class="gen-label">质量</div>
-            <div class="select-box">
-              <div class="select-box-trigger" id="qualityDisplay">中 <span>▼</span></div>
-              <div class="select-box-options" id="qualityOptions" style="display: none;">
-                <div class="select-box-option" data-quality="low">低</div>
-                <div class="select-box-option active" data-quality="medium">中</div>
-                <div class="select-box-option" data-quality="high">高</div>
+            <div class="row">
+              <div>
+                <div class="gen-label">质量</div>
+                <div class="select-box">
+                  <div class="select-box-trigger" id="qualityDisplay">中 <span>▼</span></div>
+                  <div class="select-box-options" id="qualityOptions" style="display: none;">
+                    <div class="select-box-option" data-quality="low">低</div>
+                    <div class="select-box-option active" data-quality="medium">中</div>
+                    <div class="select-box-option" data-quality="high">高</div>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div class="gen-label">输出格式</div>
+                <div class="select-box">
+                  <div class="select-box-trigger" id="formatDisplay">自动 <span>▼</span></div>
+                  <div class="select-box-options" id="formatOptions" style="display: none;">
+                    <div class="select-box-option active" data-format="auto">自动</div>
+                    <div class="select-box-option" data-format="png">PNG</div>
+                    <div class="select-box-option" data-format="jpeg">JPEG</div>
+                    <div class="select-box-option" data-format="gif">GIF 动图</div>
+                    <div class="select-box-option" data-format="svg">SVG 矢量图</div>
+                  </div>
+                </div>
               </div>
             </div>
+            <div class="hint hidden" id="formatHint" style="margin-top:6px;">有参考图时走编辑接口，实测只返回 PNG，格式选择暂不生效。</div>
           </div>
 
           <div class="gen-section">
@@ -377,7 +406,7 @@ const SIGNED_URL_TTL = 3600;
 
 let sb, currentUser = null, recovering = false, signupMode = false, historyOffset = 0;
 let providers = {};
-let selectedSize = 'auto', selectedQuality = 'medium', genStartTime = null, genProgressTimer = null;
+let selectedSize = 'auto', selectedQuality = 'medium', selectedFormat = 'auto', selectedTier = 0, genStartTime = null, genProgressTimer = null;
 let refImages = [];
 let genProgressValue = 0, genSimTimer = null;
 const PROVIDER_STORE_KEY = 'imggen-providers';
@@ -672,14 +701,60 @@ function escapeHtml(text) {
   return text.replace(/[&<>"']/g, m => map[m]);
 }
 
+// 画质档位：长边固定 HD 1280 / FHD 1920 / QHD 2560 / 4K 3840，短边按比例换算（取整到 16）
+// 9:16 正好是图一那四个：720x1280 / 1088x1920 / 1440x2560 / 2160x3840
+// 档位尺寸经接口实测：720x1280 与 2160x3840 在 gpt-image-2.6-sunburst 上均返回 200
+const TIER_LONGS = [
+  { label: 'HD', long: 1280 },
+  { label: 'FHD', long: 1920 },
+  { label: 'QHD', long: 2560 },
+  { label: '4K', long: 3840 },
+];
+function tierSizesFor(ratio) {
+  const parts = ratio.split(':').map(Number);
+  const a = parts[0], b = parts[1];
+  const longIsW = a >= b;
+  const shortRatio = Math.min(a, b) / Math.max(a, b);
+  return TIER_LONGS.map(t => {
+    const short = Math.round(t.long * shortRatio / 16) * 16;
+    const w = longIsW ? t.long : short;
+    const h = longIsW ? short : t.long;
+    return { label: `${w}x${h} ${t.label}`, size: `${w}x${h}` };
+  });
+}
+function renderTiers() {
+  const active = $('sizeOptions').querySelector('.ratio-card.active');
+  const ratio = active ? active.dataset.ratio : 'auto';
+  const box = $('tierOptions');
+  box.innerHTML = '';
+  if (!ratio || ratio === 'auto') { $('tierSection').classList.add('hidden'); selectedSize = 'auto'; return; }
+  const tiers = tierSizesFor(ratio);
+  tiers.forEach((t, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'tier-chip' + (i === selectedTier ? ' active' : '');
+    chip.textContent = t.label;
+    chip.onclick = () => {
+      selectedTier = i;
+      selectedSize = t.size;
+      box.querySelectorAll('.tier-chip').forEach(o => o.classList.remove('active'));
+      chip.classList.add('active');
+    };
+    box.append(chip);
+  });
+  selectedSize = tiers[selectedTier].size;
+  $('tierSection').classList.remove('hidden');
+}
+
 // 比例选择
 $('sizeOptions').querySelectorAll('.ratio-card').forEach(card => {
   card.addEventListener('click', () => {
     $('sizeOptions').querySelectorAll('.ratio-card').forEach(o => o.classList.remove('active'));
     card.classList.add('active');
-    selectedSize = card.dataset.size;
+    selectedTier = 0;
+    renderTiers();
   });
 });
+renderTiers();
 
 // 画质选择
 $('qualityDisplay').addEventListener('click', () => {
@@ -696,6 +771,33 @@ $('qualityOptions').querySelectorAll('.select-box-option').forEach(opt => {
     $('qualityOptions').style.display = 'none';
   });
 });
+
+// 输出格式：自动 / PNG / JPEG / GIF 动图 / SVG 矢量图
+// 实测（gpt-image-2.6-sunburst，图片接口）：PNG、JPEG、GIF、SVG 均返回对应真实文件；
+// WebP 接口直接忽略、仍返回 PNG，所以不提供；编辑接口（有参考图）一律只返回 PNG
+$('formatDisplay').addEventListener('click', () => {
+  if ($('formatDisplay').classList.contains('disabled')) return;
+  const opts = $('formatOptions');
+  opts.style.display = opts.style.display === 'none' ? 'block' : 'none';
+});
+
+$('formatOptions').querySelectorAll('.select-box-option').forEach(opt => {
+  opt.addEventListener('click', () => {
+    $('formatOptions').querySelectorAll('.select-box-option').forEach(o => o.classList.remove('active'));
+    opt.classList.add('active');
+    selectedFormat = opt.dataset.format;
+    $('formatDisplay').innerHTML = opt.textContent + ' <span>▼</span>';
+    $('formatOptions').style.display = 'none';
+  });
+});
+
+// 有参考图时走编辑接口，格式选择不生效：禁用选择器并提示
+function updateFormatState() {
+  const hasRef = refImages.length > 0;
+  $('formatDisplay').classList.toggle('disabled', hasRef);
+  if (hasRef) $('formatOptions').style.display = 'none';
+  $('formatHint').classList.toggle('hidden', !hasRef);
+}
 
 $('genClearBtn').onclick = () => {
   $('genPrompt').value = '';
@@ -723,6 +825,7 @@ function renderRefPreviews() {
   });
   $('refAddBtn').textContent = refImages.length ? `＋ 添加参考图（${refImages.length}/5）` : '＋ 添加参考图';
   $('refAddBtn').disabled = refImages.length >= 5;
+  updateFormatState();
 }
 
 function compressRefImage(file) {
@@ -877,6 +980,7 @@ $('logoutBtn').onclick = () => sb.auth.signOut();
 document.addEventListener('click', (e) => {
   if (!e.target.closest('.select-box')) {
     $('qualityOptions').style.display = 'none';
+    $('formatOptions').style.display = 'none';
   }
 });
 async function request(provider, path, body) {
@@ -943,6 +1047,7 @@ async function genByImages(provider, prompt, model, size, n, onProgress) {
   const params = { model, prompt, n };
   if (size && size !== 'auto') params.size = size;
   if (selectedQuality) params.quality = selectedQuality;
+  if (selectedFormat && selectedFormat !== 'auto') params.output_format = selectedFormat;
   let url = provider.url.replace(/\/+$/, '');
   if (!/\/v\d+$/.test(url)) url += '/v1';
   const data = await fetchJsonWithProgress(url + '/images/generations', {
@@ -953,7 +1058,8 @@ async function genByImages(provider, prompt, model, size, n, onProgress) {
     // 有总长度时按真实下载数据走（同样封顶 99），没总长度时不动，靠模拟进度
     if (total > 0 && onProgress) onProgress(Math.min(99, Math.round(loaded / total * 99)));
   });
-  return (data.data || []).map(d => d.url || (d.b64_json ? 'data:image/png;base64,' + d.b64_json : null)).filter(Boolean);
+  const mime = selectedFormat === 'jpeg' ? 'image/jpeg' : selectedFormat === 'gif' ? 'image/gif' : selectedFormat === 'svg' ? 'image/svg+xml' : 'image/png';
+  return (data.data || []).map(d => d.url || (d.b64_json ? `data:${mime};base64,` + d.b64_json : null)).filter(Boolean);
 }
 
 function dataUrlToBlob(dataUrl) {
@@ -976,6 +1082,7 @@ async function genByEdits(provider, prompt, model, size, n, refUrls, onProgress)
     form.append('n', '1');
     if (size && size !== 'auto') form.append('size', size);
     if (selectedQuality) form.append('quality', selectedQuality);
+    // 注意：编辑接口不认 output_format，实测 webp/jpeg 都仍返回 PNG、gif 直接 502，所以这里不发
     refUrls.forEach((u, i) => form.append('image', dataUrlToBlob(u), `ref-${i + 1}.jpg`));
     return fetchJsonWithProgress(url + '/images/edits', {
       method: 'POST',
@@ -1008,7 +1115,7 @@ async function saveRecord(src, meta) {
   try {
     const blob = await toBlob(src);
     const type = blob.type && blob.type.startsWith('image/') ? blob.type : 'image/png';
-    const ext = ({ 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' })[type] || 'png';
+    const ext = ({ 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/svg+xml': 'svg' })[type] || 'png';
     const path = `${currentUser.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
     
     const { error } = await sb.storage.from('images').upload(path, blob, { contentType: type });
@@ -1096,7 +1203,8 @@ function addCard(record, src, atTop) {
     const dl = document.createElement('a');
     dl.textContent = '下载';
     dl.href = src;
-    dl.download = `image-${record.id || Date.now()}.png`;
+    const dlExt = src.startsWith('data:image/jpeg') ? 'jpg' : src.startsWith('data:image/gif') ? 'gif' : src.startsWith('data:image/svg+xml') ? 'svg' : src.startsWith('data:image/webp') ? 'webp' : 'png';
+    dl.download = `image-${record.id || Date.now()}.${dlExt}`;
     dl.target = '_blank';
     actions.append(dl);
   }
@@ -1109,6 +1217,33 @@ function addCard(record, src, atTop) {
     $('genPrompt').focus();
   };
   actions.append(reuse);
+
+  // 继续改：把这张图直接加进参考图，接着改
+  if (src) {
+    const cont = document.createElement('button');
+    cont.textContent = '继续改';
+    cont.onclick = async () => {
+      if (refImages.length >= 5) return setStatus('参考图已满 5 张，先删一张再继续改', true);
+      cont.disabled = true;
+      cont.textContent = '加入中…';
+      try {
+        const res = await fetch(src);
+        if (!res.ok) throw new Error('这张图拿不到了，链接可能已过期');
+        const blob = await res.blob();
+        const dataUrl = await compressRefImage(blob);
+        refImages.push({ id: 'ref-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7), dataUrl });
+        renderRefPreviews();
+        showTab('generate');
+        setMsg($('genMsg'), '已加到参考图，可以接着改了');
+      } catch (err) {
+        setStatus(err.message || '加入参考图失败', true);
+      } finally {
+        cont.disabled = false;
+        cont.textContent = '继续改';
+      }
+    };
+    actions.append(cont);
+  }
 
   if (record.id) {
     const del = document.createElement('button');
