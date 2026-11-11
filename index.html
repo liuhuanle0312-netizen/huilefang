@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI 图片生成</title>
+<title>绘乐坊</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root {
@@ -29,7 +29,6 @@
   input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1); }
   .row { display: flex; gap: 8px; }
   .row > * { flex: 1; }
-  .row.tight { gap: 4px; }
   .check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--sub); margin-top: 8px; }
   .check input { width: auto; accent-color: var(--accent); }
   button { padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; background: var(--panel); color: var(--text); font-size: 13px; font-weight: 500; }
@@ -53,18 +52,24 @@
   .center { text-align: center; margin-top: 14px; }
 
   .app-wrap { display: flex; flex-direction: column; min-height: 100vh; }
+  
+  .brand-bar { background: var(--panel); border-bottom: 1px solid var(--line); padding: 16px 20px; font-size: 20px; font-weight: 700; color: var(--text); }
+
   .topbar { background: var(--panel); border-bottom: 1px solid var(--line); padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
   .topbar-left { display: flex; align-items: center; gap: 8px; flex: 1; }
-  .topbar-right { display: flex; align-items: center; gap: 8px; }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
   .topbar button { padding: 6px 12px; font-size: 13px; white-space: nowrap; }
   .topbar button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .avatar-btn { width: 32px; height: 32px; padding: 0; border-radius: 50%; border: 2px solid var(--line); background-size: cover; background-position: center; cursor: pointer; flex-shrink: 0; }
+  .avatar-btn:hover { border-color: var(--accent); }
+
   .app-body { display: grid; grid-template-columns: 340px 1fr; flex: 1; }
   aside { background: var(--panel); padding: 20px; border-right: 1px solid var(--line); overflow-y: auto; }
   main { padding: 20px; overflow-y: auto; }
 
   .provider-list { margin-top: 16px; }
   .provider-card { background: #f9fafb; border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin-bottom: 8px; }
-  .provider-card.editing { background: var(--input); border-color: var(--accent); }
   .provider-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
   .provider-name { font-weight: 500; color: var(--text); }
   .provider-info { font-size: 12px; color: var(--sub); line-height: 1.5; }
@@ -72,14 +77,16 @@
   .provider-actions button { padding: 4px 8px; font-size: 12px; }
 
   .gen-section { margin-bottom: 20px; }
-  .gen-row { margin-bottom: 12px; }
-  .gen-label { font-size: 12px; color: var(--sub); margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
-  .gen-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 6px; }
-  .gen-options button { padding: 8px 10px; font-size: 12px; border: 1px solid var(--line); background: var(--input); color: var(--text); }
-  .gen-options button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .size-options { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-  .size-options button { padding: 8px 10px; font-size: 12px; border: 1px solid var(--line); background: var(--input); color: var(--text); }
-  .size-options button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .gen-label { font-size: 12px; color: var(--sub); margin-bottom: 6px; font-weight: 500; }
+
+  .select-box { position: relative; }
+  .select-box-trigger { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--input); color: var(--text); font-size: 14px; text-align: left; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+  .select-box-trigger:hover { border-color: var(--accent); }
+  .select-box-options { position: absolute; top: 100%; left: 0; right: 0; background: var(--panel); border: 1px solid var(--line); border-top: none; border-radius: 0 0 6px 6px; z-index: 10; max-height: 200px; overflow-y: auto; box-shadow: 0 4px 6px rgba(0,0,0,.1); }
+  .select-box-option { padding: 10px; cursor: pointer; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .select-box-option:last-child { border-bottom: none; }
+  .select-box-option:hover { background: #f3f4f6; }
+  .select-box-option.active { background: rgba(37, 99, 235, 0.1); color: var(--accent); font-weight: 500; }
 
   #status { margin: 0 0 16px; }
   .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
@@ -103,6 +110,12 @@
   .modal-head { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
   .modal-close { position: absolute; top: 16px; right: 16px; background: none; border: none; color: var(--sub); cursor: pointer; font-size: 20px; }
 
+  .profile-section { text-align: center; margin-bottom: 24px; }
+  .profile-avatar-display { width: 80px; height: 80px; border-radius: 50%; margin: 0 auto 12px; border: 2px solid var(--line); background-size: cover; background-position: center; }
+  .profile-avatar-display.empty { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 32px; font-weight: bold; }
+  .profile-name { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  .profile-email { font-size: 13px; color: var(--sub); }
+
   @media (max-width: 800px) {
     .app-body { grid-template-columns: 1fr; }
     aside { border-right: none; border-bottom: 1px solid var(--line); }
@@ -121,7 +134,7 @@
 <!-- 登录 / 注册 -->
 <div id="viewAuth" class="hidden">
   <div class="auth-box">
-    <h1>AI 图片生成</h1>
+    <h1>绘乐坊</h1>
     <div class="tabs">
       <button id="tabLogin" class="active">登录</button>
       <button id="tabSignup">注册</button>
@@ -154,7 +167,10 @@
 <!-- 主界面 -->
 <div id="viewApp" class="hidden">
   <div class="app-wrap">
-    <!-- 顶部栏 -->
+    <!-- 品牌栏 -->
+    <div class="brand-bar">绘乐坊</div>
+
+    <!-- 顶部导航栏 -->
     <div class="topbar">
       <div class="topbar-left">
         <button id="btnAbout" class="secondary">软件介绍</button>
@@ -162,8 +178,7 @@
         <button id="btnGenerate" class="secondary">图片生成</button>
       </div>
       <div class="topbar-right">
-        <span id="userEmail" style="font-size: 13px; color: var(--sub); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
-        <button id="logoutBtn">退出</button>
+        <button id="avatarBtn" class="avatar-btn" title="个人资料"></button>
       </div>
     </div>
 
@@ -172,7 +187,7 @@
       <aside id="sidebar">
         <div id="aboutView" class="hidden">
           <h1>关于</h1>
-          <h2>AI 图片创意工坊</h2>
+          <h2>绘乐坊</h2>
           <div style="font-size: 13px; line-height: 1.8; color: var(--sub);">
             <p>一个轻量级的 AI 图片生成平台。接入 OpenAI、Google Gemini 等多个模型服务商，用你自己的 API Key 来生成图片。所有生成的图片和记录都保存在你的账号里，换设备也能看到。</p>
             <p style="margin-top: 16px;"><strong>功能</strong></p>
@@ -218,13 +233,27 @@
 
           <div class="gen-section">
             <div class="gen-label">分辨率</div>
-            <div class="size-options" id="sizeOptions">
-              <button data-size="1024x1024" class="active">1024×1024</button>
-              <button data-size="1536x1024">1536×1024</button>
-              <button data-size="1024x1536">1024×1536</button>
-              <button data-size="1792x1024">1792×1024</button>
-              <button data-size="1024x1792">1024×1792</button>
-              <button data-size="512x512">512×512</button>
+            <div class="select-box">
+              <div class="select-box-trigger" id="sizeDisplay">1024×1024 <span>▼</span></div>
+              <div class="select-box-options" id="sizeOptions" style="display: none;">
+                <div class="select-box-option active" data-size="1024x1024">1024×1024</div>
+                <div class="select-box-option" data-size="1536x1024">1536×1024</div>
+                <div class="select-box-option" data-size="1024x1536">1024×1536</div>
+                <div class="select-box-option" data-size="1792x1024">1792×1024</div>
+                <div class="select-box-option" data-size="1024x1792">1024×1792</div>
+                <div class="select-box-option" data-size="512x512">512×512</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="gen-section">
+            <div class="gen-label">画质</div>
+            <div class="select-box">
+              <div class="select-box-trigger" id="qualityDisplay">标准 <span>▼</span></div>
+              <div class="select-box-options" id="qualityOptions" style="display: none;">
+                <div class="select-box-option active" data-quality="standard">标准</div>
+                <div class="select-box-option" data-quality="hd">高清</div>
+              </div>
             </div>
           </div>
 
@@ -255,7 +284,7 @@
         </div>
       </aside>
 
-      <!-- 主内容区（历史记录） -->
+      <!-- 主内容区 -->
       <main id="mainContent">
         <div class="msg" id="status"></div>
         <div class="gallery" id="gallery"></div>
@@ -287,11 +316,36 @@
   </div>
 </div>
 
+<!-- 模态框：个人资料 -->
+<div id="modalProfile" class="modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeModal('modalProfile')">✕</button>
+    <div class="modal-head">个人资料</div>
+    
+    <div class="profile-section">
+      <div class="profile-avatar-display" id="profileAvatarDisplay"></div>
+      <input type="file" id="profileAvatarInput" accept="image/*" style="display: none;">
+      <button class="secondary" id="uploadAvatarBtn" style="width: 100%; margin-bottom: 8px;">上传头像</button>
+      <button class="secondary" id="clearAvatarBtn" style="width: 100%;">清除头像</button>
+    </div>
+
+    <label>昵称</label>
+    <input id="profileNickname" placeholder="输入你的昵称">
+    
+    <label>邮箱</label>
+    <input id="profileEmail" type="email" readonly style="background: #f3f4f6; cursor: not-allowed;">
+    
+    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line);">
+      <button class="primary" id="saveProfileBtn">保存</button>
+      <button class="secondary" id="logoutBtn" style="width: 100%; margin-top: 8px;">退出登录</button>
+    </div>
+    <div class="msg" id="profileMsg"></div>
+  </div>
+</div>
+
 <script>
-// ======== 改成你自己的 Supabase 项目信息 ========
 const SUPABASE_URL = 'https://xmwgwldhzhdsgklmvgpg.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_ZTfPpyiMKJLe9POArBS4OQ_Akd8SPQu';
-// ================================================
 
 const $ = id => document.getElementById(id);
 const PAGE_SIZE = 30;
@@ -299,8 +353,9 @@ const SIGNED_URL_TTL = 3600;
 
 let sb, currentUser = null, recovering = false, signupMode = false, historyOffset = 0;
 let providers = {};
-let selectedSize = '1024x1024', genStartTime = null, genProgressTimer = null;
+let selectedSize = '1024x1024', selectedQuality = 'standard', genStartTime = null, genProgressTimer = null;
 const PROVIDER_STORE_KEY = 'imggen-providers';
+const PROFILE_STORE_KEY = 'imggen-profile';
 
 function show(view) {
   ['viewLoading', 'viewAuth', 'viewReset', 'viewApp'].forEach(v => $(v).classList.toggle('hidden', v !== view));
@@ -394,13 +449,11 @@ $('resetSubmit').onclick = async () => {
   setTimeout(() => location.replace(redirectUrl), 1000);
 };
 
-$('logoutBtn').onclick = () => sb.auth.signOut();
-
 function enterApp(user) {
   currentUser = user;
-  $('userEmail').textContent = user.email;
   history.replaceState(null, '', redirectUrl);
   loadProviders();
+  loadProfile();
   $('gallery').innerHTML = '';
   historyOffset = 0;
   show('viewApp');
@@ -490,7 +543,7 @@ function deleteProvider(id) {
 
 $('addProviderBtn').onclick = () => {
   $('modalTitle').textContent = '添加中转站';
-$('providerName').value = '';
+  $('providerName').value = '';
   $('providerUrl').value = '';
   $('providerKey').value = '';
   $('providerRemember').checked = true;
@@ -540,17 +593,17 @@ function updateModelList() {
 
   const provider = providers[supplierId];
   if (!provider.key) {
-    modelSel.innerHTML = '<option value="">-- API Key 未保存，请在模型接入里重新编辑 --</option>';
+    modelSel.innerHTML = '<option value="">-- API Key 未保存 --</option>';
     return;
   }
 
-  modelSel.innerHTML = '<option value="">正在加载模型列表…</option>';
+  modelSel.innerHTML = '<option value="">正在加载…</option>';
   modelSel.disabled = true;
 
   fetchModels(provider).then(models => {
     modelSel.innerHTML = '<option value="">-- 请选择 --</option>';
     if (models.length === 0) {
-      modelSel.innerHTML = '<option value="">没有加载到模型，请检查 API Key 和地址</option>';
+      modelSel.innerHTML = '<option value="">没有加载到模型</option>';
     } else {
       models.forEach(m => {
         const opt = document.createElement('option');
@@ -561,7 +614,7 @@ function updateModelList() {
     }
     modelSel.disabled = false;
   }).catch(e => {
-    modelSel.innerHTML = '<option value="">加载失败：' + e.message.slice(0, 50) + '</option>';
+    modelSel.innerHTML = '<option value="">加载失败</option>';
     modelSel.disabled = false;
   });
 }
@@ -576,10 +629,9 @@ async function fetchModels(provider) {
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   
   const data = await res.json();
-  if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+  if (data.error) throw new Error(data.error.message || 'API Error');
   
-  const models = (data.data || []).map(m => m.id).sort();
-  return models;
+  return (data.data || []).map(m => m.id).sort();
 }
 
 $('genSupplier').addEventListener('change', updateModelList);
@@ -589,13 +641,36 @@ function escapeHtml(text) {
   return text.replace(/[&<>"']/g, m => map[m]);
 }
 
-// ============ 分辨率选择 ============
-$('sizeOptions').querySelectorAll('button').forEach(btn => {
-  btn.onclick = () => {
-    $('sizeOptions').querySelectorAll('button').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    selectedSize = btn.dataset.size;
-  };
+// 分辨率选择
+$('sizeDisplay').addEventListener('click', () => {
+  const opts = $('sizeOptions');
+  opts.style.display = opts.style.display === 'none' ? 'block' : 'none';
+});
+
+$('sizeOptions').querySelectorAll('.select-box-option').forEach(opt => {
+  opt.addEventListener('click', () => {
+    $('sizeOptions').querySelectorAll('.select-box-option').forEach(o => o.classList.remove('active'));
+    opt.classList.add('active');
+    selectedSize = opt.dataset.size;
+    $('sizeDisplay').innerHTML = opt.textContent + ' <span>▼</span>';
+    $('sizeOptions').style.display = 'none';
+  });
+});
+
+// 画质选择
+$('qualityDisplay').addEventListener('click', () => {
+  const opts = $('qualityOptions');
+  opts.style.display = opts.style.display === 'none' ? 'block' : 'none';
+});
+
+$('qualityOptions').querySelectorAll('.select-box-option').forEach(opt => {
+  opt.addEventListener('click', () => {
+    $('qualityOptions').querySelectorAll('.select-box-option').forEach(o => o.classList.remove('active'));
+    opt.classList.add('active');
+    selectedQuality = opt.dataset.quality;
+    $('qualityDisplay').innerHTML = opt.textContent + ' <span>▼</span>';
+    $('qualityOptions').style.display = 'none';
+  });
 });
 
 $('genClearBtn').onclick = () => {
@@ -603,7 +678,88 @@ $('genClearBtn').onclick = () => {
   $('genPrompt').focus();
 };
 
-// ============ 调用中转站 API ============
+// 个人资料
+function loadProfile() {
+  const saved = localStorage.getItem(PROFILE_STORE_KEY + '-' + currentUser.id) || '{}';
+  const profile = JSON.parse(saved);
+  updateAvatarDisplay(profile.avatar);
+}
+
+function updateAvatarDisplay(avatar) {
+  const display = $('profileAvatarDisplay');
+  if (avatar) {
+    display.style.backgroundImage = `url(${avatar})`;
+    display.classList.remove('empty');
+  } else {
+    display.style.backgroundImage = '';
+    display.classList.add('empty');
+    display.textContent = (currentUser.email || 'U').charAt(0).toUpperCase();
+  }
+  $('avatarBtn').style.backgroundImage = avatar ? `url(${avatar})` : '';
+}
+
+$('avatarBtn').onclick = () => {
+  const saved = localStorage.getItem(PROFILE_STORE_KEY + '-' + currentUser.id) || '{}';
+  const profile = JSON.parse(saved);
+  $('profileNickname').value = profile.nickname || '';
+  $('profileEmail').value = currentUser.email;
+  updateAvatarDisplay(profile.avatar);
+  setMsg($('profileMsg'), '');
+  openModal('modalProfile');
+};
+
+$('uploadAvatarBtn').onclick = () => $('profileAvatarInput').click();
+
+$('profileAvatarInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = (evt) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 100;
+      canvas.height = 100;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, 100, 100);
+      const base64 = canvas.toDataURL('image/png');
+      const saved = JSON.parse(localStorage.getItem(PROFILE_STORE_KEY + '-' + currentUser.id) || '{}');
+      saved.avatar = base64;
+      localStorage.setItem(PROFILE_STORE_KEY + '-' + currentUser.id, JSON.stringify(saved));
+      updateAvatarDisplay(base64);
+      setMsg($('profileMsg'), '头像已更新', 'ok');
+    };
+    img.src = evt.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+$('clearAvatarBtn').onclick = () => {
+  const saved = JSON.parse(localStorage.getItem(PROFILE_STORE_KEY + '-' + currentUser.id) || '{}');
+  delete saved.avatar;
+  localStorage.setItem(PROFILE_STORE_KEY + '-' + currentUser.id, JSON.stringify(saved));
+  updateAvatarDisplay(null);
+  setMsg($('profileMsg'), '头像已清除', 'ok');
+};
+
+$('saveProfileBtn').onclick = () => {
+  const nickname = $('profileNickname').value.trim();
+  const saved = JSON.parse(localStorage.getItem(PROFILE_STORE_KEY + '-' + currentUser.id) || '{}');
+  saved.nickname = nickname;
+  localStorage.setItem(PROFILE_STORE_KEY + '-' + currentUser.id, JSON.stringify(saved));
+  setMsg($('profileMsg'), '已保存', 'ok');
+  setTimeout(() => closeModal('modalProfile'), 1000);
+};
+
+$('logoutBtn').onclick = () => sb.auth.signOut();
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.select-box')) {
+    $('sizeOptions').style.display = 'none';
+    $('qualityOptions').style.display = 'none';
+  }
+});
 async function request(provider, path, body) {
   let url = provider.url.replace(/\/+$/, '');
   if (!/\/v\d+$/.test(url)) url += '/v1';
@@ -617,7 +773,7 @@ async function request(provider, path, body) {
   const text = await res.text();
   let data;
   try { data = JSON.parse(text); }
-  catch { throw new Error(`HTTP ${res.status}，返回的不是 JSON`); }
+  catch { throw new Error(`HTTP ${res.status}`); }
   
   if (!res.ok || data.error) {
     const msg = data.error?.message || data.message || JSON.stringify(data).slice(0, 300);
@@ -627,7 +783,9 @@ async function request(provider, path, body) {
 }
 
 async function genByImages(provider, prompt, model, size, n) {
-  const data = await request(provider, '/images/generations', { model, prompt, n, size });
+  const params = { model, prompt, n, size };
+  if (selectedQuality === 'hd') params.quality = 'hd';
+  const data = await request(provider, '/images/generations', params);
   return (data.data || []).map(d => d.url || (d.b64_json ? 'data:image/png;base64,' + d.b64_json : null)).filter(Boolean);
 }
 
@@ -666,7 +824,7 @@ async function genByChat(provider, prompt, model, n) {
     if (r.status === 'fulfilled') {
       const imgs = extractImagesFromChat(r.value);
       if (imgs.length) urls.push(...imgs);
-      else errors.push('回复里没有找到图片');
+      else errors.push('没有找到图片');
     } else errors.push(r.reason.message);
   });
   
@@ -674,7 +832,6 @@ async function genByChat(provider, prompt, model, n) {
   return urls;
 }
 
-// ============ 保存记录 ============
 async function toBlob(src) {
   const res = await fetch(src);
   if (!res.ok) throw new Error('下载图片失败');
@@ -693,18 +850,17 @@ async function saveRecord(src, meta) {
     if (error) throw error;
     image_path = path;
   } catch (e) {
-    if (src.startsWith('data:')) throw new Error('图片上传失败：' + (e.message || e));
+    if (src.startsWith('data:')) throw new Error('图片上传失败');
     image_url = src;
-    warn = '有图片没能存进云端，只保存了原始链接，链接过期后会失效';
+    warn = '图片链接过期后会失效';
   }
   
   const { data, error } = await sb.from('generations')
     .insert({ ...meta, image_path, image_url }).select().single();
-  if (error) throw new Error('保存记录失败：' + error.message);
+  if (error) throw new Error('保存失败');
   return { record: data, displayUrl: src, warn };
 }
 
-// ============ 历史记录 ============
 async function loadHistory() {
   $('loadMore').disabled = true;
   const { data, error } = await sb.from('generations').select('*')
@@ -712,7 +868,7 @@ async function loadHistory() {
     .range(historyOffset, historyOffset + PAGE_SIZE - 1);
   $('loadMore').disabled = false;
   
-  if (error) return setStatus('读取历史记录失败：' + error.message, true);
+  if (error) return setStatus('读取失败', true);
 
   const paths = data.filter(r => r.image_path).map(r => r.image_path);
   const signed = {};
@@ -799,7 +955,6 @@ function addCard(record, src, atTop) {
       const { error } = await sb.from('generations').delete().eq('id', record.id);
       if (error) return setStatus('删除失败', true);
       card.remove();
-      historyOffset = Math.max(0, historyOffset - 1);
       updateEmpty();
     };
     actions.append(del);
@@ -811,7 +966,6 @@ function addCard(record, src, atTop) {
   updateEmpty();
 }
 
-// ============ 生成图片 ============
 $('genBtn').onclick = async () => {
   const supplierId = $('genSupplier').value;
   const model = $('genModel').value;
@@ -839,7 +993,6 @@ $('genBtn').onclick = async () => {
   }, 500);
 
   try {
-    // 简化版：假设用图片接口
     const urls = await genByImages(provider, prompt, model, selectedSize, n);
     
     if (!urls.length) throw new Error('没有返回图片');
@@ -849,7 +1002,7 @@ $('genBtn').onclick = async () => {
     $('genProgressPercent').textContent = '100%';
     $('genProgressTime').textContent = totalTime + ' 秒';
 
-    setMsg($('genMsg'), `生成完成，${urls.length} 张，用时 ${totalTime} 秒`, 'ok');
+    setMsg($('genMsg'), `${urls.length} 张，${totalTime} 秒`, 'ok');
 
     const warns = new Set(), errs = [];
     for (const u of urls) {
@@ -869,20 +1022,19 @@ $('genBtn').onclick = async () => {
     }
 
     if (errs.length) {
-      setMsg($('genMsg'), `${urls.length} 张中有 ${errs.length} 张保存失败，请及时下载`, 'error');
+      setMsg($('genMsg'), `有 ${errs.length} 张保存失败`, 'error');
     }
   } catch (e) {
     clearInterval(genProgressTimer);
     let msg = e.message;
-    if (e instanceof TypeError) msg += '（可能是网络问题或跨域限制）';
-    setMsg($('genMsg'), '出错：' + msg, 'error');
+    if (e instanceof TypeError) msg += '（网络问题或跨域）';
+    setMsg($('genMsg'), msg, 'error');
   } finally {
     btn.disabled = false;
     setTimeout(() => {
       $('genProgressWrap').classList.add('hidden');
       $('genProgressPercent').textContent = '0%';
       $('genProgressTime').textContent = '0 秒';
-      $('genProgressBar').style.width = '0%';
     }, 2000);
   }
 };
@@ -891,10 +1043,12 @@ $('genPrompt').addEventListener('keydown', e => {
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('genBtn').click();
 });
 
-// 关闭模态框
 $('viewer').onclick = () => $('viewer').style.display = 'none';
 $('modalProvider').onclick = (e) => {
   if (e.target === $('modalProvider')) closeModal('modalProvider');
+};
+$('modalProfile').onclick = (e) => {
+  if (e.target === $('modalProfile')) closeModal('modalProfile');
 };
 </script>
 </body>
