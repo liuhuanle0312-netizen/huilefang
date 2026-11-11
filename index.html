@@ -7,13 +7,13 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root {
-    --bg: #f5f6f8;        /* 页面背景 */
-    --panel: #ffffff;     /* 侧栏、卡片 */
-    --text: #1c1e24;      /* 主文字 */
-    --sub: #6b7280;       /* 次要文字 */
-    --line: #e5e7eb;      /* 边框、分隔线 */
-    --input: #ffffff;     /* 输入框背景 */
-    --accent: #2563eb;    /* 主按钮、高亮 */
+    --bg: #f5f6f8;
+    --panel: #ffffff;
+    --text: #1c1e24;
+    --sub: #6b7280;
+    --line: #e5e7eb;
+    --input: #ffffff;
+    --accent: #2563eb;
     --accent-hover: #1d4ed8;
     --danger: #dc2626;
     --ok: #16a34a;
@@ -21,22 +21,26 @@
   * { box-sizing: border-box; }
   body { margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); }
   .hidden { display: none !important; }
-  h1 { font-size: 18px; margin: 0 0 16px; }
+  h1 { font-size: 18px; margin: 0 0 16px; font-weight: 600; }
   h2 { font-size: 14px; color: var(--sub); margin: 20px 0 8px; font-weight: 600; }
-  label { display: block; font-size: 13px; color: var(--sub); margin: 10px 0 4px; }
+  label { display: block; font-size: 13px; color: var(--sub); margin: 10px 0 4px; font-weight: 500; }
   input, select, textarea { width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--input); color: var(--text); font-size: 14px; font-family: inherit; }
-  textarea { min-height: 120px; resize: vertical; }
-  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  textarea { min-height: 100px; resize: vertical; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1); }
   .row { display: flex; gap: 8px; }
   .row > * { flex: 1; }
+  .row.tight { gap: 4px; }
   .check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--sub); margin-top: 8px; }
   .check input { width: auto; accent-color: var(--accent); }
-  button { padding: 9px 14px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; background: var(--panel); color: var(--text); font-size: 14px; }
+  button { padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; background: var(--panel); color: var(--text); font-size: 13px; font-weight: 500; }
   button:hover { background: #f3f4f6; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; width: 100%; margin-top: 14px; padding: 11px; font-size: 15px; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; width: 100%; margin-top: 12px; padding: 10px; font-size: 14px; }
   button.primary:hover { background: var(--accent-hover); }
+  button.secondary { background: #f3f4f6; border-color: var(--line); color: var(--text); }
+  button.secondary:hover { background: #e5e7eb; }
   button:disabled { opacity: .5; cursor: not-allowed; }
-  button.link { background: none; border: none; color: var(--accent); padding: 0; font-size: 13px; }
+  button.link { background: none; border: none; color: var(--accent); padding: 0; font-size: 12px; }
+  button.link:hover { text-decoration: underline; }
   .hint { font-size: 12px; color: var(--sub); margin-top: 4px; line-height: 1.5; }
   .msg { font-size: 14px; color: var(--sub); min-height: 20px; white-space: pre-wrap; margin-top: 12px; line-height: 1.5; }
   .msg.error { color: var(--danger); }
@@ -44,16 +48,39 @@
 
   .auth-box { max-width: 380px; margin: 60px auto; padding: 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
   .tabs { display: flex; gap: 8px; margin-bottom: 8px; }
-  .tabs button { flex: 1; }
+  .tabs button { flex: 1; border: 1px solid var(--line); }
   .tabs button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
   .center { text-align: center; margin-top: 14px; }
 
-  .wrap { display: grid; grid-template-columns: 340px 1fr; min-height: 100vh; }
+  .app-wrap { display: flex; flex-direction: column; min-height: 100vh; }
+  .topbar { background: var(--panel); border-bottom: 1px solid var(--line); padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+  .topbar-left { display: flex; align-items: center; gap: 8px; flex: 1; }
+  .topbar-right { display: flex; align-items: center; gap: 8px; }
+  .topbar button { padding: 6px 12px; font-size: 13px; white-space: nowrap; }
+  .topbar button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .app-body { display: grid; grid-template-columns: 340px 1fr; flex: 1; }
   aside { background: var(--panel); padding: 20px; border-right: 1px solid var(--line); overflow-y: auto; }
-  main { padding: 20px; }
-  .userbar { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--sub); margin-bottom: 16px; gap: 8px; }
-  .userbar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .userbar button { padding: 5px 10px; font-size: 12px; flex-shrink: 0; }
+  main { padding: 20px; overflow-y: auto; }
+
+  .provider-list { margin-top: 16px; }
+  .provider-card { background: #f9fafb; border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin-bottom: 8px; }
+  .provider-card.editing { background: var(--input); border-color: var(--accent); }
+  .provider-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .provider-name { font-weight: 500; color: var(--text); }
+  .provider-info { font-size: 12px; color: var(--sub); line-height: 1.5; }
+  .provider-actions { display: flex; gap: 6px; }
+  .provider-actions button { padding: 4px 8px; font-size: 12px; }
+
+  .gen-section { margin-bottom: 20px; }
+  .gen-row { margin-bottom: 12px; }
+  .gen-label { font-size: 12px; color: var(--sub); margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+  .gen-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 6px; }
+  .gen-options button { padding: 8px 10px; font-size: 12px; border: 1px solid var(--line); background: var(--input); color: var(--text); }
+  .gen-options button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .size-options { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .size-options button { padding: 8px 10px; font-size: 12px; border: 1px solid var(--line); background: var(--input); color: var(--text); }
+  .size-options button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
   #status { margin: 0 0 16px; }
   .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
@@ -66,20 +93,30 @@
   .card .actions .danger { color: var(--danger); }
   .empty { color: var(--sub); text-align: center; margin-top: 80px; }
   #loadMore { display: block; margin: 20px auto; }
+
   #viewer { position: fixed; inset: 0; background: rgba(255,255,255,.92); display: none; align-items: center; justify-content: center; z-index: 10; cursor: zoom-out; }
   #viewer img { max-width: 95vw; max-height: 95vh; box-shadow: 0 4px 24px rgba(0,0,0,.15); }
+
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.3); display: none; align-items: center; justify-content: center; z-index: 20; }
+  .modal.show { display: flex; }
+  .modal-box { background: var(--panel); border-radius: 10px; padding: 24px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,.2); }
+  .modal-head { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
+  .modal-close { position: absolute; top: 16px; right: 16px; background: none; border: none; color: var(--sub); cursor: pointer; font-size: 20px; }
+
   @media (max-width: 800px) {
-    .wrap { grid-template-columns: 1fr; }
+    .app-body { grid-template-columns: 1fr; }
     aside { border-right: none; border-bottom: 1px solid var(--line); }
     input, select, textarea { font-size: 16px; }
-    .auth-box { margin: 30px 16px; }
+    .topbar { flex-wrap: wrap; padding: 12px 16px; }
+    .topbar-left { width: 100%; order: 1; }
+    .topbar-right { order: 2; }
   }
 </style>
 </head>
 <body>
 
 <!-- 加载中 -->
-<div id="viewLoading" class="empty">加载中…</div>
+<div id="viewLoading" class="empty" style="margin-top: 40vh;">加载中…</div>
 
 <!-- 登录 / 注册 -->
 <div id="viewAuth" class="hidden">
@@ -103,7 +140,7 @@
   </div>
 </div>
 
-<!-- 重设密码（从邮件链接进入） -->
+<!-- 重设密码 -->
 <div id="viewReset" class="hidden">
   <div class="auth-box">
     <h1>设置新密码</h1>
@@ -116,68 +153,139 @@
 
 <!-- 主界面 -->
 <div id="viewApp" class="hidden">
-  <div class="wrap">
-    <aside>
-      <div class="userbar"><span id="userEmail"></span><button id="logoutBtn">退出</button></div>
-      <h1>AI 图片生成</h1>
-
-      <h2>接口设置</h2>
-      <label>中转站地址</label>
-      <input id="baseUrl" placeholder="https://api.example.com">
-      <div class="hint">地址末尾没有 /v1 时会自动补上</div>
-
-      <label>API Key</label>
-      <input id="apiKey" type="password" placeholder="sk-...">
-      <div class="check"><input type="checkbox" id="remember" checked><span>在本浏览器记住 Key</span></div>
-      <div class="hint">Key 只保存在你这台设备的浏览器里，不会上传到网站服务器</div>
-
-      <label>接口模式</label>
-      <select id="mode">
-        <option value="images">图片接口 /images/generations</option>
-        <option value="chat">对话接口 /chat/completions</option>
-      </select>
-
-      <label>模型</label>
-      <div class="row">
-        <input id="model" list="modelList" placeholder="gpt-image-1 ..." style="flex:3">
-        <button id="loadModels" style="flex:1">拉取</button>
+  <div class="app-wrap">
+    <!-- 顶部栏 -->
+    <div class="topbar">
+      <div class="topbar-left">
+        <button id="btnAbout" class="secondary">软件介绍</button>
+        <button id="btnProviders" class="secondary active">模型接入</button>
+        <button id="btnGenerate" class="secondary">图片生成</button>
       </div>
-      <datalist id="modelList"></datalist>
-
-      <h2>生成参数</h2>
-      <label>提示词</label>
-      <textarea id="prompt" placeholder="描述你想要的画面"></textarea>
-      <div class="row">
-        <div>
-          <label>尺寸</label>
-          <select id="size">
-            <option value="1024x1024">1024×1024</option>
-            <option value="1536x1024">1536×1024 横</option>
-            <option value="1024x1536">1024×1536 竖</option>
-            <option value="1792x1024">1792×1024 横</option>
-            <option value="1024x1792">1024×1792 竖</option>
-            <option value="512x512">512×512</option>
-          </select>
-        </div>
-        <div>
-          <label>数量</label>
-          <input id="count" type="number" min="1" max="4" value="1">
-        </div>
+      <div class="topbar-right">
+        <span id="userEmail" style="font-size: 13px; color: var(--sub); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
+        <button id="logoutBtn">退出</button>
       </div>
-      <div class="hint">对话模式下尺寸不生效，数量按请求次数计算</div>
-      <button class="primary" id="generate">生成</button>
-    </aside>
+    </div>
 
-    <main>
-      <div class="msg" id="status"></div>
-      <div class="gallery" id="gallery"></div>
-      <div class="empty" id="empty">还没有生成记录</div>
-      <button id="loadMore" class="hidden">加载更多</button>
-    </main>
+    <div class="app-body">
+      <!-- 侧栏 -->
+      <aside id="sidebar">
+        <div id="aboutView" class="hidden">
+          <h1>关于</h1>
+          <h2>AI 图片创意工坊</h2>
+          <div style="font-size: 13px; line-height: 1.8; color: var(--sub);">
+            <p>一个轻量级的 AI 图片生成平台。接入 OpenAI、Google Gemini 等多个模型服务商，用你自己的 API Key 来生成图片。所有生成的图片和记录都保存在你的账号里，换设备也能看到。</p>
+            <p style="margin-top: 16px;"><strong>功能</strong></p>
+            <ul style="margin: 8px 0; padding-left: 20px;">
+              <li>管理多个中转站</li>
+              <li>支持各种 AI 模型</li>
+              <li>云端存储生成历史</li>
+              <li>实时生成进度</li>
+            </ul>
+            <p style="margin-top: 16px;"><strong>开始使用</strong></p>
+            <p>先在「模型接入」里添加你的 API Key，然后切到「图片生成」开始创作。</p>
+          </div>
+        </div>
+
+        <div id="providersView">
+          <h1>模型接入</h1>
+          <p style="font-size: 12px; color: var(--sub); margin: 0 0 12px;">管理你的中转站和 API Key</p>
+          <button class="primary" id="addProviderBtn" style="margin-top: 0;">＋ 添加中转站</button>
+          <div class="provider-list" id="providerList"></div>
+          <div id="emptyProviders" class="empty" style="margin-top: 60px; font-size: 13px;">还没有添加中转站</div>
+        </div>
+
+        <div id="generateView" class="hidden">
+          <h1>图片生成</h1>
+          <div class="gen-section">
+            <div class="gen-label">供应商</div>
+            <select id="genSupplier" style="margin-bottom: 8px;">
+              <option value="">-- 请选择 --</option>
+            </select>
+          </div>
+
+          <div class="gen-section">
+            <div class="gen-label">模型</div>
+            <select id="genModel">
+              <option value="">-- 请先选择供应商 --</option>
+            </select>
+          </div>
+
+          <div class="gen-section">
+            <div class="gen-label">提示词</div>
+            <textarea id="genPrompt" placeholder="描述你想要的画面"></textarea>
+          </div>
+
+          <div class="gen-section">
+            <div class="gen-label">分辨率</div>
+            <div class="size-options" id="sizeOptions">
+              <button data-size="1024x1024" class="active">1024×1024</button>
+              <button data-size="1536x1024">1536×1024</button>
+              <button data-size="1024x1536">1024×1536</button>
+              <button data-size="1792x1024">1792×1024</button>
+              <button data-size="1024x1792">1024×1792</button>
+              <button data-size="512x512">512×512</button>
+            </div>
+          </div>
+
+          <div class="gen-section">
+            <div class="row">
+              <div style="flex: 1;">
+                <label>数量</label>
+                <input id="genCount" type="number" min="1" max="4" value="1">
+              </div>
+              <div style="flex: 1;">
+                <label>&nbsp;</label>
+                <button id="genClearBtn" class="secondary">清空</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="genProgressWrap" class="hidden" style="margin-bottom: 12px; padding: 12px; background: #f3f4f6; border-radius: 6px;">
+            <div style="font-size: 13px; color: var(--text); margin-bottom: 6px;">
+              <span id="genProgressPercent">0%</span> · <span id="genProgressTime">0 秒</span>
+            </div>
+            <div style="height: 4px; background: var(--line); border-radius: 2px; overflow: hidden;">
+              <div id="genProgressBar" style="height: 100%; background: var(--accent); width: 0%; transition: width 0.2s;"></div>
+            </div>
+          </div>
+
+          <button class="primary" id="genBtn">生成</button>
+          <div class="msg" id="genMsg"></div>
+        </div>
+      </aside>
+
+      <!-- 主内容区（历史记录） -->
+      <main id="mainContent">
+        <div class="msg" id="status"></div>
+        <div class="gallery" id="gallery"></div>
+        <div class="empty" id="empty">还没有生成记录</div>
+        <button id="loadMore" class="hidden">加载更多</button>
+      </main>
+    </div>
   </div>
 </div>
 
+<!-- 图片查看器 -->
 <div id="viewer"><img></div>
+
+<!-- 模态框：添加中转站 -->
+<div id="modalProvider" class="modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeModal('modalProvider')">✕</button>
+    <div class="modal-head" id="modalTitle">添加中转站</div>
+    <label>名称</label>
+    <input id="providerName" placeholder="例：OpenAI / 中转站1">
+    <label>API 地址</label>
+    <input id="providerUrl" placeholder="https://api.openai.com">
+    <div class="hint">不需要带 /v1，会自动补上</div>
+    <label>API Key</label>
+    <input id="providerKey" type="password" placeholder="sk-...">
+    <div class="check"><input type="checkbox" id="providerRemember" checked><span>在本浏览器记住 Key</span></div>
+    <button class="primary" id="modalProviderSubmit">保存</button>
+    <div class="msg" id="modalMsg"></div>
+  </div>
+</div>
 
 <script>
 // ======== 改成你自己的 Supabase 项目信息 ========
@@ -187,15 +295,20 @@ const SUPABASE_KEY = 'sb_publishable_ZTfPpyiMKJLe9POArBS4OQ_Akd8SPQu';
 
 const $ = id => document.getElementById(id);
 const PAGE_SIZE = 30;
-const SIGNED_URL_TTL = 3600; // 私有图片链接有效期（秒）
+const SIGNED_URL_TTL = 3600;
 
 let sb, currentUser = null, recovering = false, signupMode = false, historyOffset = 0;
+let providers = {};
+let selectedSize = '1024x1024', genStartTime = null, genProgressTimer = null;
+const PROVIDER_STORE_KEY = 'imggen-providers';
 
 function show(view) {
   ['viewLoading', 'viewAuth', 'viewReset', 'viewApp'].forEach(v => $(v).classList.toggle('hidden', v !== view));
 }
 function setMsg(el, text, type = '') { el.textContent = text; el.className = 'msg' + (type ? ' ' + type : ''); }
 function setStatus(text, isError = false) { setMsg($('status'), text, isError ? 'error' : ''); }
+function openModal(id) { $(id).classList.add('show'); }
+function closeModal(id) { $(id).classList.remove('show'); }
 
 function translateAuthError(e) {
   const m = e?.message || String(e);
@@ -203,21 +316,17 @@ function translateAuthError(e) {
   if (/Email not confirmed/i.test(m)) return '邮箱还没验证，请先点击验证邮件里的链接';
   if (/already registered|already been registered/i.test(m)) return '这个邮箱已经注册过了，请直接登录';
   if (/at least 6|Password should be/i.test(m)) return '密码至少 6 位';
-  if (/rate limit|too many/i.test(m)) return '操作太频繁，请稍后再试（免费版每小时发送邮件的数量有限）';
+  if (/rate limit|too many/i.test(m)) return '操作太频繁，请稍后再试';
   if (/invalid.*email|Unable to validate email/i.test(m)) return '邮箱格式不正确';
-  if (/Failed to fetch/i.test(m)) return '连接不上服务器，请检查网络';
+  if (/Failed to fetch/i.test(m)) return '连接不上服务器';
   return m;
 }
 
-// ---------- 初始化 ----------
 if (SUPABASE_URL.includes('你的项目') || !window.supabase) {
-  $('viewLoading').textContent = !window.supabase
-    ? 'Supabase 组件加载失败，请检查网络后刷新'
-    : '请先在代码里填写 SUPABASE_URL 和 SUPABASE_KEY';
+  $('viewLoading').textContent = !window.supabase ? 'Supabase 加载失败' : '请先在代码里填写 URL 和 Key';
 } else {
   sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   sb.auth.onAuthStateChange((event, session) => {
-    // 回调里不直接 await Supabase 请求，避免卡死，用 setTimeout 推迟执行
     setTimeout(() => {
       if (event === 'PASSWORD_RECOVERY') { recovering = true; show('viewReset'); return; }
       if (recovering) return;
@@ -228,14 +337,12 @@ if (SUPABASE_URL.includes('你的项目') || !window.supabase) {
   });
 }
 
-// ---------- 登录 / 注册 ----------
 function setTab(signup) {
   signupMode = signup;
   $('tabLogin').classList.toggle('active', !signup);
   $('tabSignup').classList.toggle('active', signup);
   $('confirmWrap').classList.toggle('hidden', !signup);
   $('authSubmit').textContent = signup ? '注册' : '登录';
-  $('authPassword').autocomplete = signup ? 'new-password' : 'current-password';
   setMsg($('authMsg'), '');
 }
 $('tabLogin').onclick = () => setTab(false);
@@ -255,9 +362,8 @@ $('authSubmit').onclick = async () => {
     if (signupMode) {
       const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: redirectUrl } });
       if (error) throw error;
-      // 邮箱已注册时 Supabase 不报错，但返回的 identities 是空数组
       if (data.user && data.user.identities?.length === 0) throw new Error('already registered');
-      setMsg($('authMsg'), '注册成功！验证邮件已发到 ' + email + '，点击邮件里的链接后就能登录。\n没收到的话看看垃圾邮件箱。', 'ok');
+      setMsg($('authMsg'), '注册成功！验证邮件已发到 ' + email, 'ok');
     } else {
       const { error } = await sb.auth.signInWithPassword({ email, password });
       if (error) throw error;
@@ -268,14 +374,15 @@ $('authSubmit').onclick = async () => {
     btn.disabled = false;
   }
 };
+
 $('authPassword').addEventListener('keydown', e => { if (e.key === 'Enter' && !signupMode) $('authSubmit').click(); });
 
 $('forgotBtn').onclick = async () => {
   const email = $('authEmail').value.trim();
-  if (!email) return setMsg($('authMsg'), '请先在上面填写邮箱，再点"忘记密码"', 'error');
+  if (!email) return setMsg($('authMsg'), '请先填写邮箱', 'error');
   const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: redirectUrl });
   if (error) setMsg($('authMsg'), translateAuthError(error), 'error');
-  else setMsg($('authMsg'), '重设密码的邮件已发送，请查收', 'ok');
+  else setMsg($('authMsg'), '重设密码的邮件已发送', 'ok');
 };
 
 $('resetSubmit').onclick = async () => {
@@ -283,115 +390,297 @@ $('resetSubmit').onclick = async () => {
   if (password.length < 6) return setMsg($('resetMsg'), '密码至少 6 位', 'error');
   const { error } = await sb.auth.updateUser({ password });
   if (error) return setMsg($('resetMsg'), translateAuthError(error), 'error');
-  setMsg($('resetMsg'), '密码已更新，正在进入…', 'ok');
+  setMsg($('resetMsg'), '密码已更新', 'ok');
   setTimeout(() => location.replace(redirectUrl), 1000);
 };
 
 $('logoutBtn').onclick = () => sb.auth.signOut();
 
-// ---------- 进入主界面 ----------
 function enterApp(user) {
   currentUser = user;
   $('userEmail').textContent = user.email;
-  history.replaceState(null, '', redirectUrl); // 清掉地址栏里验证链接带的参数
-  loadSettings();
+  history.replaceState(null, '', redirectUrl);
+  loadProviders();
   $('gallery').innerHTML = '';
   historyOffset = 0;
   show('viewApp');
+  showTab('providers');
   loadHistory();
 }
 
-// ---------- 设置（按用户分开保存在本地） ----------
-const FIELDS = ['baseUrl', 'apiKey', 'mode', 'model', 'size', 'count'];
-const DEFAULTS = { baseUrl: '', apiKey: '', mode: 'images', model: '', size: '1024x1024', count: '1' };
-const storeKey = () => 'imggen-settings-' + currentUser.id;
+function showTab(tab) {
+  $('aboutView').classList.toggle('hidden', tab !== 'about');
+  $('providersView').classList.toggle('hidden', tab !== 'providers');
+  $('generateView').classList.toggle('hidden', tab !== 'generate');
+  
+  const btns = { about: $('btnAbout'), providers: $('btnProviders'), generate: $('btnGenerate') };
+  Object.values(btns).forEach(b => b.classList.remove('active'));
+  if (btns[tab]) btns[tab].classList.add('active');
 
-function loadSettings() {
-  // 兼容旧版：第一次登录时沿用之前保存的地址和 Key
-  const raw = localStorage.getItem(storeKey()) || localStorage.getItem('imggen-settings') || '{}';
-  const s = JSON.parse(raw);
-  FIELDS.forEach(f => $(f).value = s[f] ?? DEFAULTS[f]);
-  $('remember').checked = s.remember !== false;
+  if (tab === 'generate') {
+    updateModelList();
+  }
 }
-function saveSettings() {
-  if (!currentUser) return;
-  const s = { remember: $('remember').checked };
-  FIELDS.forEach(f => s[f] = $(f).value);
-  if (!s.remember) delete s.apiKey;
-  localStorage.setItem(storeKey(), JSON.stringify(s));
-}
-FIELDS.concat('remember').forEach(f => $(f).addEventListener('change', saveSettings));
 
-// ---------- 调用中转站 ----------
-function apiBase() {
-  let u = $('baseUrl').value.trim().replace(/\/+$/, '');
-  if (!u) throw new Error('请填写中转站地址');
-  if (!/\/v\d+$/.test(u)) u += '/v1';
-  return u;
+$('btnAbout').onclick = () => showTab('about');
+$('btnProviders').onclick = () => showTab('providers');
+$('btnGenerate').onclick = () => showTab('generate');
+
+function loadProviders() {
+  const saved = localStorage.getItem(PROVIDER_STORE_KEY + '-' + currentUser.id) || '{}';
+  providers = JSON.parse(saved);
+  renderProviders();
+  updateSupplierOptions();
 }
-async function request(path, body) {
-  const key = $('apiKey').value.trim();
-  if (!key) throw new Error('请填写 API Key');
-  const res = await fetch(apiBase() + path, {
+
+function saveProviders() {
+  localStorage.setItem(PROVIDER_STORE_KEY + '-' + currentUser.id, JSON.stringify(providers));
+  updateSupplierOptions();
+}
+
+function renderProviders() {
+  const list = $('providerList');
+  list.innerHTML = '';
+  const ids = Object.keys(providers);
+  
+  if (ids.length === 0) {
+    $('emptyProviders').style.display = 'block';
+    return;
+  }
+  $('emptyProviders').style.display = 'none';
+
+  ids.forEach(id => {
+    const p = providers[id];
+    const card = document.createElement('div');
+    card.className = 'provider-card';
+    card.innerHTML = `
+      <div class="provider-head">
+        <div class="provider-name">${escapeHtml(p.name)}</div>
+        <div class="provider-actions">
+          <button onclick="editProvider('${id}')">编辑</button>
+          <button onclick="deleteProvider('${id}')" style="color: var(--danger);">删除</button>
+        </div>
+      </div>
+      <div class="provider-info">
+        <div>${escapeHtml(p.url)}</div>
+      </div>
+    `;
+    list.append(card);
+  });
+}
+
+function editProvider(id) {
+  const p = providers[id];
+  $('modalTitle').textContent = '编辑中转站';
+  $('providerName').value = p.name;
+  $('providerUrl').value = p.url;
+  $('providerKey').value = p.key;
+  $('providerRemember').checked = true;
+  $('modalProviderSubmit').onclick = () => submitProvider(id);
+  setMsg($('modalMsg'), '');
+  openModal('modalProvider');
+}
+
+function deleteProvider(id) {
+  if (!confirm('确定删除这个中转站吗？')) return;
+  delete providers[id];
+  saveProviders();
+  renderProviders();
+}
+
+$('addProviderBtn').onclick = () => {
+  $('modalTitle').textContent = '添加中转站';
+$('providerName').value = '';
+  $('providerUrl').value = '';
+  $('providerKey').value = '';
+  $('providerRemember').checked = true;
+  $('modalProviderSubmit').onclick = () => submitProvider(null);
+  setMsg($('modalMsg'), '');
+  openModal('modalProvider');
+};
+
+function submitProvider(editId) {
+  const name = $('providerName').value.trim();
+  const url = $('providerUrl').value.trim().replace(/\/+$/, '');
+  const key = $('providerKey').value.trim();
+  
+  if (!name) return setMsg($('modalMsg'), '请填写名称', 'error');
+  if (!url) return setMsg($('modalMsg'), '请填写 API 地址', 'error');
+  if (!key) return setMsg($('modalMsg'), '请填写 API Key', 'error');
+
+  const id = editId || 'provider-' + Date.now();
+  const remember = $('providerRemember').checked;
+  providers[id] = { name, url, key: remember ? key : '', _hidden: !remember };
+  saveProviders();
+  renderProviders();
+  closeModal('modalProvider');
+}
+
+function updateSupplierOptions() {
+  const sel = $('genSupplier');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">-- 请选择 --</option>';
+  Object.entries(providers).forEach(([id, p]) => {
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = p.name;
+    sel.append(opt);
+  });
+  sel.value = current;
+}
+
+function updateModelList() {
+  const supplierId = $('genSupplier').value;
+  const modelSel = $('genModel');
+  
+  if (!supplierId) {
+    modelSel.innerHTML = '<option value="">-- 请先选择供应商 --</option>';
+    return;
+  }
+
+  const provider = providers[supplierId];
+  if (!provider.key) {
+    modelSel.innerHTML = '<option value="">-- API Key 未保存，请在模型接入里重新编辑 --</option>';
+    return;
+  }
+
+  modelSel.innerHTML = '<option value="">正在加载模型列表…</option>';
+  modelSel.disabled = true;
+
+  fetchModels(provider).then(models => {
+    modelSel.innerHTML = '<option value="">-- 请选择 --</option>';
+    if (models.length === 0) {
+      modelSel.innerHTML = '<option value="">没有加载到模型，请检查 API Key 和地址</option>';
+    } else {
+      models.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m;
+        modelSel.append(opt);
+      });
+    }
+    modelSel.disabled = false;
+  }).catch(e => {
+    modelSel.innerHTML = '<option value="">加载失败：' + e.message.slice(0, 50) + '</option>';
+    modelSel.disabled = false;
+  });
+}
+
+async function fetchModels(provider) {
+  let url = provider.url.replace(/\/+$/, '');
+  if (!/\/v\d+$/.test(url)) url += '/v1';
+  
+  const res = await fetch(url + '/models', {
+    headers: { 'Authorization': 'Bearer ' + provider.key }
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+  
+  const models = (data.data || []).map(m => m.id).sort();
+  return models;
+}
+
+$('genSupplier').addEventListener('change', updateModelList);
+
+function escapeHtml(text) {
+  const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+  return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+// ============ 分辨率选择 ============
+$('sizeOptions').querySelectorAll('button').forEach(btn => {
+  btn.onclick = () => {
+    $('sizeOptions').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedSize = btn.dataset.size;
+  };
+});
+
+$('genClearBtn').onclick = () => {
+  $('genPrompt').value = '';
+  $('genPrompt').focus();
+};
+
+// ============ 调用中转站 API ============
+async function request(provider, path, body) {
+  let url = provider.url.replace(/\/+$/, '');
+  if (!/\/v\d+$/.test(url)) url += '/v1';
+  
+  const res = await fetch(url + path, {
     method: body ? 'POST' : 'GET',
-    headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
+    headers: { 'Authorization': 'Bearer ' + provider.key, 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined
   });
+  
   const text = await res.text();
   let data;
   try { data = JSON.parse(text); }
-  catch { throw new Error(`HTTP ${res.status}，返回的不是 JSON：\n${text.slice(0, 300)}`); }
+  catch { throw new Error(`HTTP ${res.status}，返回的不是 JSON`); }
+  
   if (!res.ok || data.error) {
     const msg = data.error?.message || data.message || JSON.stringify(data).slice(0, 300);
     throw new Error(`HTTP ${res.status}：${msg}`);
   }
   return data;
 }
-async function genByImages(prompt, model, size, n) {
-  const data = await request('/images/generations', { model, prompt, n, size });
+
+async function genByImages(provider, prompt, model, size, n) {
+  const data = await request(provider, '/images/generations', { model, prompt, n, size });
   return (data.data || []).map(d => d.url || (d.b64_json ? 'data:image/png;base64,' + d.b64_json : null)).filter(Boolean);
 }
+
 function extractFromText(text) {
   const out = [];
   for (const m of text.matchAll(/!\[[^\]]*\]\(\s*([^)\s]+)\s*\)/g)) out.push(m[1]);
   for (const m of text.matchAll(/data:image\/[a-zA-Z+]+;base64,[A-Za-z0-9+/=]+/g)) out.push(m[0]);
-  if (!out.length) for (const m of text.matchAll(/https?:\/\/[^\s"'<>)]+\.(?:png|jpe?g|webp|gif)(?:\?[^\s"'<>)]*)?/gi)) out.push(m[0]);
+  if (!out.length) {
+    for (const m of text.matchAll(/https?:\/\/[^\s"'<>)]+\.(?:png|jpe?g|webp|gif)(?:\?[^\s"'<>)]*)?/gi)) out.push(m[0]);
+  }
   return out;
 }
+
 function extractImagesFromChat(data) {
   const msg = data.choices?.[0]?.message || {};
   const urls = [];
   (msg.images || []).forEach(i => urls.push(i.image_url?.url || i.url));
   const c = msg.content;
-  if (Array.isArray(c)) c.forEach(p => {
-    if (p.type === 'image_url') urls.push(p.image_url?.url);
-    if (p.type === 'text' && p.text) urls.push(...extractFromText(p.text));
-  });
-  else if (typeof c === 'string') urls.push(...extractFromText(c));
+  if (Array.isArray(c)) {
+    c.forEach(p => {
+      if (p.type === 'image_url') urls.push(p.image_url?.url);
+      if (p.type === 'text' && p.text) urls.push(...extractFromText(p.text));
+    });
+  } else if (typeof c === 'string') {
+    urls.push(...extractFromText(c));
+  }
   return [...new Set(urls.filter(Boolean))];
 }
-async function genByChat(prompt, model, n) {
+
+async function genByChat(provider, prompt, model, n) {
   const results = await Promise.allSettled(Array.from({ length: n }, () =>
-    request('/chat/completions', { model, messages: [{ role: 'user', content: prompt }] })));
+    request(provider, '/chat/completions', { model, messages: [{ role: 'user', content: prompt }] })));
+  
   const urls = [], errors = [];
   results.forEach(r => {
     if (r.status === 'fulfilled') {
       const imgs = extractImagesFromChat(r.value);
       if (imgs.length) urls.push(...imgs);
-      else errors.push('回复里没有找到图片：' + JSON.stringify(r.value.choices?.[0]?.message?.content || r.value).slice(0, 200));
+      else errors.push('回复里没有找到图片');
     } else errors.push(r.reason.message);
   });
+  
   if (!urls.length) throw new Error(errors.join('\n'));
   return urls;
 }
 
-// ---------- 保存记录 ----------
+// ============ 保存记录 ============
 async function toBlob(src) {
-  const res = await fetch(src); // data: 链接一定能转；外部链接要看对方是否允许跨域
+  const res = await fetch(src);
   if (!res.ok) throw new Error('下载图片失败');
   return res.blob();
 }
-// 返回 { record, displayUrl, warn }
+
 async function saveRecord(src, meta) {
   let image_path = null, image_url = null, warn = '';
   try {
@@ -399,27 +688,30 @@ async function saveRecord(src, meta) {
     const type = blob.type && blob.type.startsWith('image/') ? blob.type : 'image/png';
     const ext = ({ 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' })[type] || 'png';
     const path = `${currentUser.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    
     const { error } = await sb.storage.from('images').upload(path, blob, { contentType: type });
     if (error) throw error;
     image_path = path;
   } catch (e) {
     if (src.startsWith('data:')) throw new Error('图片上传失败：' + (e.message || e));
-    image_url = src; // 外部链接存不进来，就只保存链接
-    warn = '有图片没能存进云端，只保存了原始链接，链接过期后会失效，请及时下载';
+    image_url = src;
+    warn = '有图片没能存进云端，只保存了原始链接，链接过期后会失效';
   }
+  
   const { data, error } = await sb.from('generations')
     .insert({ ...meta, image_path, image_url }).select().single();
   if (error) throw new Error('保存记录失败：' + error.message);
   return { record: data, displayUrl: src, warn };
 }
 
-// ---------- 历史记录 ----------
+// ============ 历史记录 ============
 async function loadHistory() {
   $('loadMore').disabled = true;
   const { data, error } = await sb.from('generations').select('*')
     .order('created_at', { ascending: false })
     .range(historyOffset, historyOffset + PAGE_SIZE - 1);
   $('loadMore').disabled = false;
+  
   if (error) return setStatus('读取历史记录失败：' + error.message, true);
 
   const paths = data.filter(r => r.image_path).map(r => r.image_path);
@@ -428,14 +720,18 @@ async function loadHistory() {
     const { data: s } = await sb.storage.from('images').createSignedUrls(paths, SIGNED_URL_TTL);
     (s || []).forEach(x => { if (x.signedUrl) signed[x.path] = x.signedUrl; });
   }
+  
   data.forEach(r => addCard(r, signed[r.image_path] || r.image_url, false));
   historyOffset += data.length;
   $('loadMore').classList.toggle('hidden', data.length < PAGE_SIZE);
   updateEmpty();
 }
+
 $('loadMore').onclick = loadHistory;
 
-function updateEmpty() { $('empty').style.display = $('gallery').children.length ? 'none' : 'block'; }
+function updateEmpty() {
+  $('empty').style.display = $('gallery').children.length ? 'none' : 'block';
+}
 
 function addCard(record, src, atTop) {
   const card = document.createElement('div');
@@ -447,7 +743,12 @@ function addCard(record, src, atTop) {
     imgEl.src = src;
     imgEl.loading = 'lazy';
     imgEl.onclick = () => { $('viewer').querySelector('img').src = src; $('viewer').style.display = 'flex'; };
-    imgEl.onerror = () => { const b = document.createElement('div'); b.className = 'broken'; b.textContent = '图片已失效'; imgEl.replaceWith(b); };
+    imgEl.onerror = () => {
+      const b = document.createElement('div');
+      b.className = 'broken';
+      b.textContent = '图片已失效';
+      imgEl.replaceWith(b);
+    };
   } else {
     imgEl = document.createElement('div');
     imgEl.className = 'broken';
@@ -456,15 +757,20 @@ function addCard(record, src, atTop) {
 
   const meta = document.createElement('div');
   meta.className = 'meta';
+  
   const p = document.createElement('div');
   p.className = 'prompt';
   p.textContent = record.prompt;
+  
   const info = document.createElement('div');
+  const time = new Date(record.created_at || Date.now());
+  const secs = record.gen_seconds ? ` · ${record.gen_seconds}s` : '';
+  info.textContent = `${record.model || 'unknown'} · ${time.toLocaleString()}${secs}`;
   info.style.marginBottom = '8px';
-  info.textContent = `${record.model || ''} · ${new Date(record.created_at || Date.now()).toLocaleString()}`;
 
   const actions = document.createElement('div');
   actions.className = 'actions';
+  
   if (src) {
     const dl = document.createElement('a');
     dl.textContent = '下载';
@@ -473,9 +779,14 @@ function addCard(record, src, atTop) {
     dl.target = '_blank';
     actions.append(dl);
   }
+  
   const reuse = document.createElement('button');
   reuse.textContent = '复用提示词';
-  reuse.onclick = () => { $('prompt').value = record.prompt; $('prompt').focus(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  reuse.onclick = () => {
+    $('genPrompt').value = record.prompt;
+    showTab('generate');
+    $('genPrompt').focus();
+  };
   actions.append(reuse);
 
   if (record.id) {
@@ -483,10 +794,10 @@ function addCard(record, src, atTop) {
     del.textContent = '删除';
     del.className = 'danger';
     del.onclick = async () => {
-      if (!confirm('确定删除这条记录吗？删除后无法恢复。')) return;
+      if (!confirm('确定删除吗？')) return;
       if (record.image_path) await sb.storage.from('images').remove([record.image_path]);
       const { error } = await sb.from('generations').delete().eq('id', record.id);
-      if (error) return setStatus('删除失败：' + error.message, true);
+      if (error) return setStatus('删除失败', true);
       card.remove();
       historyOffset = Math.max(0, historyOffset - 1);
       updateEmpty();
@@ -500,69 +811,91 @@ function addCard(record, src, atTop) {
   updateEmpty();
 }
 
-// ---------- 生成 ----------
-$('generate').onclick = async () => {
-  const prompt = $('prompt').value.trim();
-  const model = $('model').value.trim();
-  const mode = $('mode').value;
-  const size = $('size').value;
-  const n = Math.min(Math.max(parseInt($('count').value) || 1, 1), 4);
-  if (!prompt) return setStatus('请输入提示词', true);
-  if (!model) return setStatus('请填写模型名', true);
+// ============ 生成图片 ============
+$('genBtn').onclick = async () => {
+  const supplierId = $('genSupplier').value;
+  const model = $('genModel').value;
+  const prompt = $('genPrompt').value.trim();
+  const n = Math.min(Math.max(parseInt($('genCount').value) || 1, 1), 4);
+  
+  if (!supplierId) return setMsg($('genMsg'), '请选择供应商', 'error');
+  if (!model) return setMsg($('genMsg'), '请选择模型', 'error');
+  if (!prompt) return setMsg($('genMsg'), '请输入提示词', 'error');
 
-  saveSettings();
-  const btn = $('generate');
+  const provider = providers[supplierId];
+  if (!provider.key) return setMsg($('genMsg'), 'API Key 未保存', 'error');
+
+  const btn = $('genBtn');
   btn.disabled = true;
-  const start = Date.now();
-  const timer = setInterval(() => setStatus(`生成中… ${((Date.now() - start) / 1000).toFixed(0)} 秒`), 500);
+  setMsg($('genMsg'), '');
+  
+  $('genProgressWrap').classList.remove('hidden');
+  genStartTime = Date.now();
+  let progressCount = 0;
+  
+  genProgressTimer = setInterval(() => {
+    const elapsed = (Date.now() - genStartTime) / 1000;
+    $('genProgressTime').textContent = Math.round(elapsed) + ' 秒';
+  }, 500);
 
   try {
-    const urls = mode === 'images' ? await genByImages(prompt, model, size, n) : await genByChat(prompt, model, n);
-    if (!urls.length) throw new Error('接口返回成功，但没有图片数据');
-    clearInterval(timer);
-    setStatus('生成完成，正在保存…');
+    // 简化版：假设用图片接口
+    const urls = await genByImages(provider, prompt, model, selectedSize, n);
+    
+    if (!urls.length) throw new Error('没有返回图片');
+    
+    clearInterval(genProgressTimer);
+    const totalTime = Math.round((Date.now() - genStartTime) / 1000);
+    $('genProgressPercent').textContent = '100%';
+    $('genProgressTime').textContent = totalTime + ' 秒';
+
+    setMsg($('genMsg'), `生成完成，${urls.length} 张，用时 ${totalTime} 秒`, 'ok');
 
     const warns = new Set(), errs = [];
     for (const u of urls) {
-      const meta = { prompt, model, mode, size: mode === 'images' ? size : null };
+      const meta = { prompt, model, gen_seconds: totalTime };
       try {
         const { record, displayUrl, warn } = await saveRecord(u, meta);
         if (warn) warns.add(warn);
         addCard(record, displayUrl, true);
         historyOffset++;
+        progressCount++;
+        const percent = Math.round((progressCount / urls.length) * 100);
+        $('genProgressPercent').textContent = percent + '%';
       } catch (e) {
         errs.push(e.message);
-        addCard({ ...meta, created_at: new Date().toISOString() }, u, true); // 没存上也先显示出来
+        addCard({ ...meta, created_at: new Date().toISOString() }, u, true);
       }
     }
-    const secs = ((Date.now() - start) / 1000).toFixed(1);
-    if (errs.length) setStatus(`生成了 ${urls.length} 张，用时 ${secs} 秒，但有 ${errs.length} 张没保存成功：\n${errs.join('\n')}\n请先手动下载这些图片`, true);
-    else setStatus(`完成，${urls.length} 张，用时 ${secs} 秒，已保存` + (warns.size ? '\n' + [...warns].join('\n') : ''));
+
+    if (errs.length) {
+      setMsg($('genMsg'), `${urls.length} 张中有 ${errs.length} 张保存失败，请及时下载`, 'error');
+    }
   } catch (e) {
+    clearInterval(genProgressTimer);
     let msg = e.message;
-    if (e instanceof TypeError) msg += '\n可能是网络问题，或中转站不允许浏览器直接跨域访问（CORS）。';
-    setStatus('出错了：' + msg, true);
+    if (e instanceof TypeError) msg += '（可能是网络问题或跨域限制）';
+    setMsg($('genMsg'), '出错：' + msg, 'error');
   } finally {
-    clearInterval(timer);
     btn.disabled = false;
-  }
-};
-$('prompt').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('generate').click(); });
-
-$('loadModels').onclick = async () => {
-  try {
-    setStatus('正在拉取模型列表…');
-    const data = await request('/models');
-    const ids = (data.data || []).map(m => m.id).sort();
-    $('modelList').innerHTML = '';
-    ids.forEach(id => { const o = document.createElement('option'); o.value = id; $('modelList').append(o); });
-    setStatus(`拉取到 ${ids.length} 个模型，点模型输入框可以选择`);
-  } catch (e) {
-    setStatus('拉取模型失败：' + e.message, true);
+    setTimeout(() => {
+      $('genProgressWrap').classList.add('hidden');
+      $('genProgressPercent').textContent = '0%';
+      $('genProgressTime').textContent = '0 秒';
+      $('genProgressBar').style.width = '0%';
+    }, 2000);
   }
 };
 
+$('genPrompt').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('genBtn').click();
+});
+
+// 关闭模态框
 $('viewer').onclick = () => $('viewer').style.display = 'none';
+$('modalProvider').onclick = (e) => {
+  if (e.target === $('modalProvider')) closeModal('modalProvider');
+};
 </script>
 </body>
 </html>
