@@ -78,6 +78,8 @@
   .msg { font-size: 14px; color: var(--sub); min-height: 20px; white-space: pre-wrap; margin-top: 12px; line-height: 1.5; }
   .msg.error { color: var(--danger); }
   .msg.ok { color: var(--ok); }
+  #aboutView details { margin: 8px 0; }
+  #aboutView summary { cursor: pointer; font-weight: 600; color: var(--text); }
 
   .auth-box { max-width: 380px; margin: 60px auto; padding: 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
   .tabs { display: flex; gap: 8px; margin-bottom: 8px; }
@@ -323,6 +325,33 @@
             <p style="margin-top: 16px;"><strong>开始使用</strong></p>
             <p>先在「模型接入」里添加你的 API Key，然后切到「图片生成」开始创作。</p>
             <p><a href="#" onclick="openModal('modalOnboard'); return false;">详细说明 →</a></p>
+            <p style="margin-top: 16px;"><strong>隐私说明</strong></p>
+            <ul style="margin: 8px 0; padding-left: 20px;">
+              <li>你的 API Key 只保存在你自己的浏览器里，网站服务器和数据库都不经手、不上传。</li>
+              <li>生成的图片和记录存在你的账号下，其他用户看不到。</li>
+              <li>登录支持二次验证，账号更安全。</li>
+            </ul>
+            <p style="margin-top: 16px;"><strong>常见问题</strong></p>
+            <details><summary>API Key 存在哪？</summary><p>只存在你当前用的浏览器里。换浏览器、换手机或者清了缓存，都要重新填一次。</p></details>
+            <details><summary>换设备能看到以前生成的图吗？</summary><p>能。历史记录和图片存在云端账号里，登录同一个账号就能看到。但 API Key 不跟账号走，新设备要重新填 Key。</p></details>
+            <details><summary>图片保存多久？</summary><p>图片存在云端，不会自动删除。历史图片的打开链接 7 天有效，过期后打开时会自动续一次；如果显示“图片已失效”，就是链接过期且续签失败了。</p></details>
+            <details><summary>生成失败怎么办？</summary><p>页面会用中文告诉你原因，比如 Key 不对、没开通这个模型、请求太频繁，按提示处理就行。</p></details>
+            <details><summary>用这个网站要钱吗？</summary><p>网站本身不收费。生图消耗的是你自己中转站 Key 的额度，用多少由你的中转站计费。</p></details>
+            <details><summary>为什么有的图打不开？</summary><p>有些中转站的图片链接不允许跨域下载，网站只能存个链接，链接过期后就打不开了。</p></details>
+            <p style="margin-top: 16px;"><strong>更新日志</strong></p>
+            <ul style="margin: 8px 0; padding-left: 20px;">
+              <li><strong>v20</strong>（2026-11-12）：多模型对比、数量上限 8 张、iOS 适配</li>
+              <li><strong>v19</strong>（2026-11-12）：参考图长按看大图、相对时间、圆润字体等 11 项优化</li>
+              <li><strong>v18</strong>（2026-11-12）：安全升级——暗号进后台、二次验证、人机验证、安全日志</li>
+              <li><strong>v17</strong>（2026-11-12）：生成骨架屏、看大图取图片主色、使用说明文档</li>
+              <li><strong>v15–v16</strong>（2026-11-12）：报错中文解释、毛玻璃顶栏、深色模式细节优化</li>
+              <li><strong>v14</strong>（2026-11-12）：管理后台上线</li>
+              <li><strong>v13</strong>（2026-11-12）：供应商测速、余额查询、左右滑动切换页面</li>
+              <li><strong>v6–v12</strong>（2026-11-11）：参考图编辑接口、深色模式、上次选择记忆、历史尺寸显示</li>
+              <li><strong>v1–v5</strong>（2026-11-11）：首次上线，多供应商、比例质量选择、参考图</li>
+            </ul>
+            <p style="margin-top: 16px;"><strong>联系方式</strong></p>
+            <p>有问题或建议，联系站长：QQ：168264129 <button class="link" id="copyQqBtn" onclick="copyQQ()">复制</button></p>
           </div>
         </div>
 
@@ -2202,6 +2231,21 @@ $('modalProvider').onclick = (e) => {
 $('modalProfile').onclick = (e) => {
   if (e.target === $('modalProfile')) closeModal('modalProfile');
 };
+
+// 复制站长 QQ 号
+function copyQQ() {
+  const qq = '168264129';
+  const done = () => { const b = $('copyQqBtn'); if (b) { b.textContent = '已复制'; setTimeout(() => b.textContent = '复制', 1500); } };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(qq).then(done).catch(() => fallbackCopyQQ(qq, done));
+  else fallbackCopyQQ(qq, done);
+}
+function fallbackCopyQQ(text, done) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); done(); } catch (e) {}
+  ta.remove();
+}
 </script>
 </body>
 </html>
