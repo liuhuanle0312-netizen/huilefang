@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>绘乐坊</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 <style>
   :root {
     --bg: #f5f6f8;
@@ -115,7 +116,7 @@
   .role-badge.admin { background: rgba(37, 99, 235, .12); color: var(--accent); }
   .admin-act { padding: 6px 0; border-bottom: 1px solid var(--line); }
   .admin-gens img { width: 100%; max-height: 160px; object-fit: contain; border-radius: 6px; background: var(--soft); cursor: zoom-in; }
-  #aboutView, #providersView, #generateView, #adminView, #mainContent { animation: fadeIn .25s ease; }
+  #aboutView, #providersView, #generateView, #mainContent { animation: fadeIn .25s ease; }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
   .provider-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
   .provider-name { font-weight: 500; color: var(--text); }
@@ -241,8 +242,15 @@
       <label>确认密码</label>
       <input id="authPassword2" type="password" autocomplete="new-password">
     </div>
+    <div id="turnstileBox" class="hidden" style="margin-top: 12px;"><div id="turnstileWidget"></div></div>
     <button class="primary" id="authSubmit">登录</button>
     <div class="center"><button class="link" id="forgotBtn">忘记密码？</button></div>
+    <div id="mfaWrap" class="hidden">
+      <label>二次验证码</label>
+      <input id="mfaCode" inputmode="numeric" maxlength="6" placeholder="验证器 App 里的 6 位数字">
+      <button class="primary" id="mfaSubmit">验证并登录</button>
+      <div class="center"><button class="link" id="mfaBackBtn">返回</button></div>
+    </div>
     <div class="msg" id="authMsg"></div>
   </div>
 </div>
@@ -262,7 +270,7 @@
 <div id="viewApp" class="hidden">
   <div class="app-wrap">
     <!-- 品牌栏 -->
-    <div class="brand-bar"><span class="brand-name">绘乐坊</span><div class="brand-right"><button id="themeToggle" class="secondary" title="深色模式" style="padding: 6px 10px;">🌙</button><button id="avatarBtn" class="avatar-btn" title="个人资料"></button></div></div>
+    <div class="brand-bar"><span class="brand-name" id="brandName">绘乐坊</span><div class="brand-right"><button id="themeToggle" class="secondary" title="深色模式" style="padding: 6px 10px;">🌙</button><button id="avatarBtn" class="avatar-btn" title="个人资料"></button></div></div>
 
     <!-- 顶部导航栏 -->
     <div class="topbar">
@@ -270,7 +278,6 @@
         <button id="btnAbout" class="secondary">软件介绍</button>
         <button id="btnProviders" class="secondary active">模型接入</button>
         <button id="btnGenerate" class="secondary">图片生成</button>
-        <button id="btnAdmin" class="secondary hidden">管理后台</button>
       </div>
     </div>
 
@@ -407,20 +414,6 @@
         </div>
 
         <!-- 管理后台：按钮默认隐藏，只有管理员登录后才显示 -->
-        <div id="adminView" class="hidden">
-          <h1>管理后台</h1>
-          <div class="stat-grid">
-            <div class="stat-box tint-blue"><div class="stat-num" id="statUsers">—</div><div class="stat-label">注册人数</div></div>
-            <div class="stat-box tint-green"><div class="stat-num" id="statOnline">—</div><div class="stat-label">当前在线</div></div>
-            <div class="stat-box tint-orange"><div class="stat-num" id="statToday">—</div><div class="stat-label">今日生图</div></div>
-            <div class="stat-box tint-purple"><div class="stat-num" id="statTotal">—</div><div class="stat-label">累计生图</div></div>
-          </div>
-          <button id="adminRefreshBtn" class="secondary" style="margin: 4px 0 12px;">刷新</button>
-          <h2>用户列表</h2>
-          <div id="adminUserList" style="font-size: 13px;"></div>
-          <h2>最近操作</h2>
-          <div id="adminActivityList" style="font-size: 13px;"></div>
-        </div>
       </aside>
 
       <!-- 主内容区 -->
@@ -474,6 +467,22 @@
     
     <label>邮箱</label>
     <input id="profileEmail" type="email" readonly style="background: var(--soft); cursor: not-allowed;">
+
+    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line);">
+      <div style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">二次验证</div>
+      <div id="mfaStatus" style="font-size: 13px; color: var(--sub); margin-bottom: 8px;">未开启</div>
+      <div id="mfaEnrollBox" class="hidden">
+        <div style="font-size: 13px; color: var(--sub);">在验证器 App（Google Authenticator、微软 Authenticator 等）里扫码，或者选“手动输入设置密钥”填下面这串密钥，然后输入 App 里显示的 6 位验证码：</div>
+        <div id="mfaQr" class="hidden" style="text-align: center; margin: 8px 0;"></div>
+        <div id="mfaSecret" style="font-size: 13px; word-break: break-all; background: var(--soft); padding: 8px; border-radius: 6px; margin: 8px 0; font-family: monospace;"></div>
+        <label>6 位验证码</label>
+        <input id="mfaEnrollCode" inputmode="numeric" maxlength="6" placeholder="123456">
+        <button class="primary" id="mfaConfirmBtn" style="margin-top: 8px;">确认开启</button>
+      </div>
+      <button class="secondary" id="mfaEnrollBtn" style="width: 100%;">开启二次验证</button>
+      <button class="secondary hidden" id="mfaUnenrollBtn" style="width: 100%;">关闭二次验证</button>
+      <div class="msg" id="mfaMsg"></div>
+    </div>
     
     <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line);">
       <button class="primary" id="saveProfileBtn">保存</button>
@@ -506,6 +515,7 @@
 <script>
 const SUPABASE_URL = 'https://xmwgwldhzhdsgklmvgpg.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_ZTfPpyiMKJLe9POArBS4OQ_Akd8SPQu';
+const TURNSTILE_SITEKEY = ''; // 在 Cloudflare 建 Turnstile 站点后把 sitekey 填在这里，空着就不显示验证码
 
 const $ = id => document.getElementById(id);
 const PAGE_SIZE = 30;
@@ -532,6 +542,23 @@ applyTheme();
 window.addEventListener('scroll', () => {
   document.body.classList.toggle('scrolled', window.scrollY > 40);
 }, { passive: true });
+
+// 管理后台暗号入口：3 秒内连点 5 下“绘乐坊”；是管理员就跳后台页，不是就悄悄记一笔
+let brandTaps = 0, brandTapTimer = null;
+async function tryEnterAdmin() {
+  await checkAdminRole();
+  if (myRole === 'admin' || myRole === 'super_admin') {
+    location.href = 'admin.html';
+  } else {
+    logSecurity('admin_attempt', '连点“绘乐坊”5 下');
+  }
+}
+$('brandName').onclick = () => {
+  brandTaps++;
+  clearTimeout(brandTapTimer);
+  brandTapTimer = setTimeout(() => { brandTaps = 0; }, 3000);
+  if (brandTaps >= 5) { brandTaps = 0; tryEnterAdmin(); }
+};
 
 let sb, currentUser = null, recovering = false, signupMode = false, historyOffset = 0;
 let myRole = 'user';
@@ -622,6 +649,23 @@ $('tabSignup').onclick = () => setTab(true);
 
 const redirectUrl = location.origin + location.pathname;
 
+// 登录人机验证（Cloudflare Turnstile）：sitekey 没填就不显示，填了才在登录/注册表单下出现
+let turnstileToken = '';
+let turnstileRendered = false;
+function renderTurnstile() {
+  if (!TURNSTILE_SITEKEY || !window.turnstile || turnstileRendered) return;
+  turnstileRendered = true;
+  $('turnstileBox').classList.remove('hidden');
+  window.turnstile.render('#turnstileWidget', {
+    sitekey: TURNSTILE_SITEKEY,
+    callback: (t) => { turnstileToken = t; },
+    'expired-callback': () => { turnstileToken = ''; if (window.turnstile) window.turnstile.reset(); },
+    'error-callback': () => { turnstileToken = ''; },
+  });
+}
+window.addEventListener('load', renderTurnstile);
+renderTurnstile();
+
 $('authSubmit').onclick = async () => {
   const email = $('authEmail').value.trim();
   const password = $('authPassword').value;
@@ -631,14 +675,18 @@ $('authSubmit').onclick = async () => {
   const btn = $('authSubmit');
   btn.disabled = true;
   try {
+    const captchaToken = turnstileToken || undefined;
     if (signupMode) {
-      const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: redirectUrl } });
+      const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: redirectUrl, captchaToken } });
       if (error) throw error;
       if (data.user && data.user.identities?.length === 0) throw new Error('already registered');
       setMsg($('authMsg'), '注册成功！验证邮件已发到 ' + email, 'ok');
     } else {
-      const { error } = await sb.auth.signInWithPassword({ email, password });
+      const { error } = await sb.auth.signInWithPassword({ email, password, options: { captchaToken } });
       if (error) throw error;
+      // 开了二次验证的账号：密码过了还要输动态码
+      const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (aal && aal.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') showMfaStep();
     }
   } catch (e) {
     setMsg($('authMsg'), translateAuthError(e), 'error');
@@ -649,10 +697,52 @@ $('authSubmit').onclick = async () => {
 
 $('authPassword').addEventListener('keydown', e => { if (e.key === 'Enter' && !signupMode) $('authSubmit').click(); });
 
+// 登录二次验证：密码过了、动态码还没输时，藏起登录表单、只显示输码框
+function showMfaStep() {
+  ['authEmail', 'authPassword', 'authSubmit', 'forgotBtn', 'confirmWrap', 'tabLogin', 'tabSignup', 'turnstileBox'].forEach(id => $(id).classList.add('hidden'));
+  $('mfaWrap').classList.remove('hidden');
+  setMsg($('authMsg'), '这个账号开了二次验证，请输入验证器 App 里的 6 位动态码');
+  $('mfaCode').value = '';
+  $('mfaCode').focus();
+}
+function hideMfaStep() {
+  ['authEmail', 'authPassword', 'authSubmit', 'forgotBtn', 'tabLogin', 'tabSignup'].forEach(id => $(id).classList.remove('hidden'));
+  if (turnstileRendered) $('turnstileBox').classList.remove('hidden');
+  $('mfaWrap').classList.add('hidden');
+  setMsg($('authMsg'), '');
+}
+$('mfaSubmit').onclick = async () => {
+  const code = $('mfaCode').value.trim();
+  if (!/^\d{6}$/.test(code)) return setMsg($('authMsg'), '请输入 6 位数字验证码', 'error');
+  const btn = $('mfaSubmit');
+  btn.disabled = true;
+  try {
+    const { data: factors } = await sb.auth.mfa.listFactors();
+    const totp = (factors?.totp || []).find(f => f.status === 'verified');
+    if (!totp) return setMsg($('authMsg'), '没找到已验证的二次验证方式', 'error');
+    const { data: ch, error: chErr } = await sb.auth.mfa.challenge({ factorId: totp.id });
+    if (chErr) throw chErr;
+    const { error } = await sb.auth.mfa.verify({ factorId: totp.id, challengeId: ch.id, code });
+    if (error) { logSecurity('mfa_fail', '登录二次验证失败'); return setMsg($('authMsg'), '验证码不对，再试一次', 'error'); }
+    hideMfaStep();
+    const { data: { user } } = await sb.auth.getUser();
+    if (user) enterApp(user);
+  } catch (e) {
+    setMsg($('authMsg'), translateAuthError(e), 'error');
+  } finally {
+    btn.disabled = false;
+  }
+};
+$('mfaBackBtn').onclick = async () => {
+  await sb.auth.signOut();
+  hideMfaStep();
+};
+$('mfaCode').addEventListener('keydown', e => { if (e.key === 'Enter') $('mfaSubmit').click(); });
+
 $('forgotBtn').onclick = async () => {
   const email = $('authEmail').value.trim();
   if (!email) return setMsg($('authMsg'), '请先填写邮箱', 'error');
-  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: redirectUrl });
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: redirectUrl, captchaToken: turnstileToken || undefined });
   if (error) setMsg($('authMsg'), translateAuthError(error), 'error');
   else setMsg($('authMsg'), '重设密码的邮件已发送', 'ok');
 };
@@ -666,7 +756,16 @@ $('resetSubmit').onclick = async () => {
   setTimeout(() => location.replace(redirectUrl), 1000);
 };
 
-function enterApp(user) {
+async function enterApp(user) {
+  // 二次验证守门：这个账号开了 MFA 但还没输动态码，先不进应用，等输码
+  try {
+    const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aal && aal.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') {
+      show('viewAuth');
+      showMfaStep();
+      return;
+    }
+  } catch (e) {}
   currentUser = user;
   history.replaceState(null, '', redirectUrl);
   loadProviders();
@@ -680,19 +779,20 @@ function enterApp(user) {
   checkAdminRole();
   startPresence();
   logActivity('login');
+  // 登录 IP（尽力而为，拿不到就不记）：后台能看到每次登录的 IP，换地方登录一眼就能发现
+  fetch('https://api.ipify.org?format=json').then(r => r.json()).then(d => {
+    if (d && d.ip) logSecurity('login', 'IP ' + d.ip);
+  }).catch(() => {});
   maybeShowOnboard();
 }
 
 function showTab(tab) {
-  // 管理后台只有管理员能进，其他人点进来也跳回模型接入
-  if (tab === 'admin' && myRole !== 'admin' && myRole !== 'super_admin') tab = 'providers';
   currentTab = tab;
   $('aboutView').classList.toggle('hidden', tab !== 'about');
   $('providersView').classList.toggle('hidden', tab !== 'providers');
   $('generateView').classList.toggle('hidden', tab !== 'generate');
-  $('adminView').classList.toggle('hidden', tab !== 'admin');
   
-  const btns = { about: $('btnAbout'), providers: $('btnProviders'), generate: $('btnGenerate'), admin: $('btnAdmin') };
+  const btns = { about: $('btnAbout'), providers: $('btnProviders'), generate: $('btnGenerate') };
   Object.values(btns).forEach(b => b.classList.remove('active'));
   if (btns[tab]) btns[tab].classList.add('active');
 
@@ -704,17 +804,13 @@ function showTab(tab) {
   if (tab === 'generate') {
     updateModelList();
   }
-  if (tab === 'admin') {
-    loadAdmin();
-  }
 }
 
 $('btnAbout').onclick = () => showTab('about');
 $('btnProviders').onclick = () => showTab('providers');
 $('btnGenerate').onclick = () => showTab('generate');
-$('btnAdmin').onclick = () => showTab('admin');
 
-// 左右滑动切换页面：软件介绍 ↔ 模型接入 ↔ 图片生成（管理员还有管理后台）
+// 左右滑动切换页面：软件介绍 ↔ 模型接入 ↔ 图片生成
 let currentTab = 'providers';
 let swipeStartX = 0, swipeStartY = 0, swipeStartEl = null;
 document.addEventListener('touchstart', e => {
@@ -735,15 +831,14 @@ document.addEventListener('touchend', e => {
   if (document.querySelector('.modal.show')) return;
   if (el.closest && el.closest('input, textarea, select')) return;
   const tabs = ['about', 'providers', 'generate'];
-  if (!$('btnAdmin').classList.contains('hidden')) tabs.push('admin');
   const idx = tabs.indexOf(currentTab);
   const next = dx < 0 ? Math.min(idx + 1, tabs.length - 1) : Math.max(idx - 1, 0);
   if (next !== idx) showTab(tabs[next]);
 }, { passive: true });
 
-// ---- 管理后台 ----
+// ---- 角色 ----
 // 登录后查自己的角色：没有档案就建一个（只写 id 和邮箱，角色默认 user，自己改不了自己的角色）；
-// 是管理员或最高管理者，就显示隐藏的管理后台按钮
+// 角色只用来决定 5 下暗号能不能进后台，真正的数据权限靠数据库规则
 async function checkAdminRole() {
   try {
     const { data } = await sb.from('profiles').select('role').eq('id', currentUser.id).maybeSingle();
@@ -754,7 +849,6 @@ async function checkAdminRole() {
       myRole = data.role || 'user';
     }
   } catch (e) { myRole = 'user'; }
-  if (myRole === 'admin' || myRole === 'super_admin') $('btnAdmin').classList.remove('hidden');
 }
 
 // 在线人数：每个登录用户都加入 presence 频道，只报自己的 id；只有管理后台读这个数
@@ -786,6 +880,18 @@ async function logActivity(action, detail = '') {
   } catch (e) {}
 }
 
+// 安全日志：进后台尝试、改角色、登录异常等（记失败也不影响正常用；只有管理员能在后台页看到）
+async function logSecurity(action, detail = '') {
+  let u = currentUser;
+  if (!u) {
+    try { const { data: { user } } = await sb.auth.getUser(); u = user; } catch (e) {}
+  }
+  if (!u) return;
+  try {
+    await sb.from('security_log').insert({ user_id: u.id, email: u.email, action, detail });
+  } catch (e) {}
+}
+
 async function getViewUrl(record) {
   if (record.image_url) return record.image_url;
   if (record.image_path) {
@@ -797,88 +903,7 @@ async function getViewUrl(record) {
   return '';
 }
 
-async function loadAdmin() {
-  if (myRole !== 'admin' && myRole !== 'super_admin') return;
-  const { count: userCount } = await sb.from('profiles').select('id', { count: 'exact', head: true });
-  $('statUsers').textContent = userCount ?? '—';
-  const { count: totalGen } = await sb.from('generations').select('id', { count: 'exact', head: true });
-  $('statTotal').textContent = totalGen ?? '—';
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const { count: todayGen } = await sb.from('generations').select('id', { count: 'exact', head: true }).gte('created_at', today.toISOString());
-  $('statToday').textContent = todayGen ?? '—';
-  updateOnlineCount();
 
-  const { data: users } = await sb.from('profiles').select('id, email, role, created_at').order('created_at', { ascending: true });
-  const list = $('adminUserList');
-  list.innerHTML = '';
-  (users || []).forEach(u => {
-    const row = document.createElement('div');
-    row.className = 'admin-user';
-    const isSelf = u.id === currentUser.id;
-    const roleName = u.role === 'super_admin' ? '最高管理者' : u.role === 'admin' ? '管理员' : '用户';
-    row.innerHTML = `
-      <div class="row1">
-        <div><strong>${escapeHtml(u.email || u.id.slice(0, 8))}</strong> <span class="role-badge ${u.role}">${roleName}</span></div>
-        ${myRole === 'super_admin' && !isSelf && u.role !== 'super_admin' ? `<select class="role-select" title="下发权限">
-          <option value="user"${u.role === 'user' ? ' selected' : ''}>用户</option>
-          <option value="admin"${u.role === 'admin' ? ' selected' : ''}>管理员</option>
-        </select>` : ''}
-      </div>
-      <div style="color: var(--sub); margin-top: 4px;">注册：${new Date(u.created_at).toLocaleString()} · 生图：<span class="gen-count">…</span> 张</div>
-      <div style="margin-top: 6px;"><button class="secondary show-gens">生图记录</button></div>
-      <div class="admin-gens hidden"></div>`;
-    list.append(row);
-    sb.from('generations').select('id', { count: 'exact', head: true }).eq('user_id', u.id).then(({ count }) => {
-      const el = row.querySelector('.gen-count');
-      if (el) el.textContent = count ?? 0;
-    });
-    const sel = row.querySelector('.role-select');
-    if (sel) sel.onchange = async () => {
-      const { error } = await sb.from('profiles').update({ role: sel.value }).eq('id', u.id);
-      if (error) { setStatus('权限下发失败', true); sel.value = u.role; return; }
-      setStatus('已把 ' + (u.email || '') + ' 设为' + (sel.value === 'admin' ? '管理员' : '用户'));
-      loadAdmin();
-    };
-    const btn = row.querySelector('.show-gens');
-    const box = row.querySelector('.admin-gens');
-    btn.onclick = async () => {
-      if (!box.classList.contains('hidden')) { box.classList.add('hidden'); btn.textContent = '生图记录'; return; }
-      btn.textContent = '加载中…';
-      const { data: gens } = await sb.from('generations').select('id, prompt, model, size, image_path, image_url, created_at').eq('user_id', u.id).order('created_at', { ascending: false }).limit(20);
-      box.innerHTML = '';
-      if (!gens || gens.length === 0) box.innerHTML = '<div style="color: var(--sub); padding: 6px 0;">还没有生图记录</div>';
-      for (const g of gens || []) {
-        const url = await getViewUrl(g);
-        const item = document.createElement('div');
-        item.style.cssText = 'margin-top: 8px;';
-        item.innerHTML = `<div style="font-size: 12px; color: var(--sub);">${g.model || ''} · ${g.size || ''} · ${new Date(g.created_at).toLocaleString()}</div><div style="font-size: 12px; margin: 2px 0;">${escapeHtml(g.prompt || '')}</div>`;
-        if (url) {
-          const im = document.createElement('img');
-          im.src = url;
-          im.onclick = () => openViewer(url);
-          item.prepend(im);
-        }
-        box.append(item);
-      }
-      box.classList.remove('hidden');
-      btn.textContent = '收起记录';
-    };
-  });
-
-  const { data: acts } = await sb.from('activity_log').select('email, action, detail, created_at').order('created_at', { ascending: false }).limit(50);
-  const actBox = $('adminActivityList');
-  actBox.innerHTML = '';
-  const actionName = { login: '登录', generate: '生图', delete: '删除' };
-  (acts || []).forEach(a => {
-    const d = document.createElement('div');
-    d.className = 'admin-act';
-    d.textContent = `${new Date(a.created_at).toLocaleString()} · ${a.email || ''} · ${actionName[a.action] || a.action}${a.detail ? ' · ' + a.detail : ''}`;
-    actBox.append(d);
-  });
-  if (!acts || acts.length === 0) actBox.innerHTML = '<div style="color: var(--sub);">暂无操作记录</div>';
-}
-
-$('adminRefreshBtn').onclick = () => loadAdmin();
 
 // 上次使用的供应商和模型：每次打开默认恢复上次的选择
 const LAST_USED_KEY = 'imggen-last-used';
@@ -1370,6 +1395,7 @@ $('avatarBtn').onclick = () => {
   $('profileEmail').value = currentUser.email;
   updateAvatarDisplay(profile.avatar);
   setMsg($('profileMsg'), '');
+  refreshMfaStatus();
   openModal('modalProfile');
 };
 
@@ -1418,6 +1444,75 @@ $('saveProfileBtn').onclick = () => {
 };
 
 $('logoutBtn').onclick = () => sb.auth.signOut();
+
+// 二次验证（TOTP）：登录密码之外再加一道手机验证码器的 6 位动态码
+let mfaFactorId = null;
+async function refreshMfaStatus() {
+  try {
+    const { data } = await sb.auth.mfa.listFactors();
+    const totp = (data?.totp || []).find(f => f.status === 'verified');
+    mfaFactorId = totp ? totp.id : null;
+    $('mfaStatus').textContent = mfaFactorId ? '已开启：每次登录要多输一次 6 位动态码' : '未开启';
+    $('mfaEnrollBtn').classList.toggle('hidden', !!mfaFactorId);
+    $('mfaUnenrollBtn').classList.toggle('hidden', !mfaFactorId);
+    if (mfaFactorId) $('mfaEnrollBox').classList.add('hidden');
+  } catch (e) {}
+}
+$('mfaEnrollBtn').onclick = async () => {
+  setMsg($('mfaMsg'), '');
+  try {
+    // 先清掉之前没验证完的旧因子，免得越积越多
+    const { data: factors } = await sb.auth.mfa.listFactors();
+    for (const f of (factors?.totp || [])) {
+      if (f.status === 'unverified') { try { await sb.auth.mfa.unenroll({ factorId: f.id }); } catch (e) {} }
+    }
+    const { data, error } = await sb.auth.mfa.enroll({ factorType: 'totp' });
+    if (error) throw error;
+    mfaFactorId = data.id;
+    $('mfaSecret').textContent = data.totp.secret;
+    const qr = data.totp.qr_code;
+    const qrBox = $('mfaQr');
+    if (qr) {
+      if (qr.startsWith('data:')) qrBox.innerHTML = `<img src="${qr}" style="width:160px;height:160px;">`;
+      else qrBox.innerHTML = qr;
+      qrBox.classList.remove('hidden');
+    } else {
+      qrBox.classList.add('hidden');
+    }
+    $('mfaEnrollBox').classList.remove('hidden');
+    setMsg($('mfaMsg'), '密钥已生成，按上面步骤在验证器 App 里添加', 'ok');
+  } catch (e) {
+    setMsg($('mfaMsg'), '开启失败：' + (e.message || '未知错误'), 'error');
+  }
+};
+$('mfaConfirmBtn').onclick = async () => {
+  const code = $('mfaEnrollCode').value.trim();
+  if (!/^\d{6}$/.test(code)) return setMsg($('mfaMsg'), '请输入 6 位数字验证码', 'error');
+  const btn = $('mfaConfirmBtn');
+  btn.disabled = true;
+  try {
+    const { data: ch, error: chErr } = await sb.auth.mfa.challenge({ factorId: mfaFactorId });
+    if (chErr) throw chErr;
+    const { error } = await sb.auth.mfa.verify({ factorId: mfaFactorId, challengeId: ch.id, code });
+    if (error) return setMsg($('mfaMsg'), '验证码不对，再试一次', 'error');
+    $('mfaEnrollBox').classList.add('hidden');
+    setMsg($('mfaMsg'), '二次验证已开启', 'ok');
+    logSecurity('mfa_enroll', '');
+    refreshMfaStatus();
+  } catch (e) {
+    setMsg($('mfaMsg'), '验证失败：' + (e.message || '未知错误'), 'error');
+  } finally {
+    btn.disabled = false;
+  }
+};
+$('mfaUnenrollBtn').onclick = async () => {
+  if (!confirm('确定关闭二次验证吗？关闭后只用密码就能登录。')) return;
+  const { error } = await sb.auth.mfa.unenroll({ factorId: mfaFactorId });
+  if (error) return setMsg($('mfaMsg'), '关闭失败：' + (error.message || '未知错误'), 'error');
+  setMsg($('mfaMsg'), '二次验证已关闭', 'ok');
+  logSecurity('mfa_unenroll', '');
+  refreshMfaStatus();
+};
 
 document.addEventListener('click', (e) => {
   if (!e.target.closest('.select-box')) {

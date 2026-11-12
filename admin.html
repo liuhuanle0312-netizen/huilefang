@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>管理后台 · 绘乐坊</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --panel: #ffffff;
+    --text: #1c1e24;
+    --sub: #6b7280;
+    --line: #e5e7eb;
+    --input: #ffffff;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --danger: #dc2626;
+    --ok: #16a34a;
+    --soft: #f3f4f6;
+    --soft-hover: #e5e7eb;
+    --softest: #f9fafb;
+    --viewer-bg: rgba(255,255,255,.92);
+    --panel-glass: rgba(255,255,255,.8);
+  }
+  html.dark {
+    --bg: #111827;
+    --panel: #1f2937;
+    --text: #f3f4f6;
+    --sub: #9ca3af;
+    --line: #374151;
+    --input: #111827;
+    --accent: #3b82f6;
+    --accent-hover: #2563eb;
+    --danger: #f87171;
+    --ok: #4ade80;
+    --soft: #374151;
+    --soft-hover: #4b5563;
+    --softest: #111827;
+    --viewer-bg: rgba(0,0,0,.88);
+    --panel-glass: rgba(31,41,55,.8);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); }
+  .hidden { display: none !important; }
+  h1 { font-size: 18px; margin: 0 0 16px; font-weight: 600; }
+  h2 { font-size: 14px; color: var(--sub); margin: 20px 0 8px; font-weight: 600; }
+  label { display: block; font-size: 13px; color: var(--sub); margin: 10px 0 4px; font-weight: 500; }
+  input, select, textarea { width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--input); color: var(--text); font-size: 14px; font-family: inherit; transition: border-color .15s, box-shadow .15s; }
+  textarea { min-height: 100px; resize: vertical; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15); }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  .check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--sub); margin-top: 8px; }
+  .check input { width: auto; accent-color: var(--accent); }
+  button { padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; background: var(--panel); color: var(--text); font-size: 13px; font-weight: 500; transition: background-color .15s, border-color .15s, transform .1s; }
+  button:hover { background: var(--soft); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; width: 100%; margin-top: 12px; padding: 12px; font-size: 15px; font-weight: 600; border-radius: 8px; }
+  button.primary:hover { background: var(--accent-hover); }
+  button.primary:active { transform: scale(.98); }
+  button.secondary { background: var(--soft); border-color: var(--line); color: var(--text); }
+  button.secondary:hover { background: var(--soft-hover); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.link { background: none; border: none; color: var(--accent); padding: 0; font-size: 12px; }
+  button.link:hover { text-decoration: underline; }
+  .hint { font-size: 12px; color: var(--sub); margin-top: 4px; line-height: 1.5; }
+  .msg { font-size: 14px; color: var(--sub); min-height: 20px; white-space: pre-wrap; margin-top: 12px; line-height: 1.5; }
+  .msg.error { color: var(--danger); }
+  .msg.ok { color: var(--ok); }
+
+  .auth-box { max-width: 380px; margin: 60px auto; padding: 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .tabs { display: flex; gap: 8px; margin-bottom: 8px; }
+  .tabs button { flex: 1; border: 1px solid var(--line); }
+  .tabs button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .center { text-align: center; margin-top: 14px; }
+
+  .app-wrap { display: flex; flex-direction: column; min-height: 100vh; }
+  
+  .brand-bar { background: var(--panel); padding: 16px 20px 4px; font-size: 20px; font-weight: 700; color: var(--text); display: flex; justify-content: space-between; align-items: center; transition: padding .25s ease; }
+  .brand-right { display: flex; align-items: center; gap: 12px; }
+  .brand-bar .brand-name { font-size: 28px; transition: font-size .25s ease; }
+  body.scrolled .brand-bar .brand-name { font-size: 18px; }
+  body.scrolled .brand-bar { padding-top: 10px; padding-bottom: 2px; }
+  #themeToggle { transition: transform .45s ease; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #9ca3af; flex-shrink: 0; }
+  .status-dot.ok { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  .status-dot.bad { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+
+  .topbar { background: var(--panel-glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 5; }
+  .topbar-left { display: flex; align-items: center; gap: 8px; flex: 1; }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .topbar button { padding: 6px 12px; font-size: 13px; white-space: nowrap; }
+  .topbar button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .avatar-btn { width: 32px; height: 32px; padding: 0; border-radius: 50%; border: 2px solid var(--line); background-size: cover; background-position: center; cursor: pointer; flex-shrink: 0; }
+  .avatar-btn:hover { border-color: var(--accent); }
+
+  .app-body { display: grid; grid-template-columns: 340px 1fr; flex: 1; }
+  .app-body.no-main { grid-template-columns: 1fr; }
+  aside { background: var(--panel); padding: 20px; border-right: 1px solid var(--line); overflow-y: auto; }
+  main { padding: 20px; overflow-y: auto; }
+
+  .provider-list { margin-top: 16px; }
+  .provider-card { background: var(--softest); border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin-bottom: 8px; }
+  .provider-tools { margin-top: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .provider-tools button { padding: 4px 10px; font-size: 12px; }
+  .stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 12px 0; }
+  .stat-box { background: var(--softest); border: 1px solid var(--line); border-radius: 8px; padding: 12px 8px; text-align: center; }
+  .stat-num { font-size: 22px; font-weight: 700; }
+  .stat-label { font-size: 12px; color: var(--sub); margin-top: 4px; }
+  .admin-user { background: var(--softest); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+  .admin-user .row1 { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .role-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--soft); white-space: nowrap; }
+  .role-badge.super_admin { background: rgba(220, 38, 38, .12); color: var(--danger); }
+  .role-badge.admin { background: rgba(37, 99, 235, .12); color: var(--accent); }
+  .admin-act { padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .admin-gens img { width: 100%; max-height: 160px; object-fit: contain; border-radius: 6px; background: var(--soft); cursor: zoom-in; }
+  #aboutView, #providersView, #generateView, #adminView, #mainContent { animation: fadeIn .25s ease; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .provider-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .provider-name { font-weight: 500; color: var(--text); }
+  .provider-info { font-size: 12px; color: var(--sub); line-height: 1.5; }
+  .provider-actions { display: flex; gap: 6px; }
+  .provider-actions button { padding: 4px 8px; font-size: 12px; }
+
+  .gen-section { margin-bottom: 20px; }
+  .gen-label { font-size: 12px; color: var(--sub); margin-bottom: 6px; font-weight: 500; }
+  .ratio-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .ratio-card { border: 1px solid var(--line); border-radius: 8px; padding: 6px 4px 5px; text-align: center; cursor: pointer; background: var(--panel); transition: border-color .15s, background-color .15s; }
+  .ratio-card:hover { border-color: var(--accent); }
+  .ratio-card.active { border-color: var(--accent); background: rgba(37, 99, 235, 0.08); color: var(--accent); }
+  .ratio-shape-wrap { height: 30px; display: flex; align-items: center; justify-content: center; margin-bottom: 4px; }
+  .ratio-shape { width: 34px; height: 24px; margin: 0; border: 2px solid #6b7280; border-radius: 3px; transform: scale(.8); }
+  .tier-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .tier-chip { border: 1px solid var(--line); border-radius: 8px; padding: 6px 2px; text-align: center; cursor: pointer; background: var(--panel); font-size: 12px; color: var(--text); transition: border-color .15s, background-color .15s; }
+  .tier-chip:hover { border-color: var(--accent); }
+  .tier-chip.active { border-color: var(--accent); background: rgba(37, 99, 235, 0.08); color: var(--accent); font-weight: 600; }
+  #tierSection, #ratioSection { margin-bottom: 12px; }
+  .skeleton-img { height: 200px; background: linear-gradient(90deg, var(--soft) 25%, var(--soft-hover) 50%, var(--soft) 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite linear; }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  #genPrompt { max-height: 200px; overflow-y: auto; }
+  .select-box-trigger.disabled { opacity: .45; cursor: not-allowed; }
+  .ratio-card.active .ratio-shape { border-color: var(--accent); }
+  .ratio-name { font-size: 13px; font-weight: 600; }
+  .ratio-sub { font-size: 11px; color: var(--sub); margin-top: 2px; }
+  .ratio-card.active .ratio-sub { color: var(--accent); }
+  select:has(option[value=""]:checked) { color: var(--sub); }
+
+  .select-box { position: relative; }
+  .select-box-trigger { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--input); color: var(--text); font-size: 14px; text-align: left; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+  .select-box-trigger:hover { border-color: var(--accent); }
+  .select-box-options { position: absolute; top: 100%; left: 0; right: 0; background: var(--panel); border: 1px solid var(--line); border-top: none; border-radius: 0 0 6px 6px; z-index: 10; max-height: 200px; overflow-y: auto; box-shadow: 0 4px 6px rgba(0,0,0,.1); }
+  .select-box-option { padding: 10px; cursor: pointer; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .select-box-option:last-child { border-bottom: none; }
+  .select-box-option:hover { background: var(--soft); }
+  .select-box-option.active { background: rgba(37, 99, 235, 0.1); color: var(--accent); font-weight: 500; }
+
+  .ref-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 8px; }
+  .ref-grid:empty { display: none; }
+  .ref-thumb { position: relative; aspect-ratio: 1; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); background: var(--soft); }
+  .ref-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ref-remove { position: absolute; top: 2px; right: 2px; width: 20px; height: 20px; padding: 0; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; border: none; font-size: 12px; line-height: 1; }
+  #status { margin: 0 0 16px; }
+  .section-title { font-size: 16px; font-weight: 600; color: var(--text); margin: 4px 0 12px; }
+  .gallery { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.04); transition: box-shadow .15s; }
+  .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); }
+  .card img { max-width: 100%; max-height: 160px; width: auto; height: auto; display: block; margin: 0 auto; cursor: zoom-in; background: var(--soft); }
+  .card .broken { padding: 40px 10px; text-align: center; color: var(--sub); font-size: 13px; background: var(--soft); }
+  .card .meta { padding: 8px; font-size: 11px; color: var(--sub); }
+  .card .prompt { color: var(--text); margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .card .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .card .actions a, .card .actions button { font-size: 14px; padding: 5px 8px; border-radius: 4px; background: var(--soft); color: var(--text); text-decoration: none; border: 1px solid var(--line); cursor: pointer; }
+  .card .actions a:hover, .card .actions button:hover { background: var(--soft-hover); }
+  #refAddBtn { border-style: dashed; background: var(--softest); padding: 10px; }
+  #refAddBtn:hover { border-color: var(--accent); color: var(--accent); background: rgba(37, 99, 235, 0.05); }
+  .card .actions .danger { color: var(--danger); }
+  .empty { color: var(--sub); text-align: center; margin-top: 80px; }
+  #loadMore { display: block; margin: 20px auto; }
+
+  #viewer { position: fixed; inset: 0; background: var(--viewer-bg); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: none; align-items: center; justify-content: center; z-index: 10; cursor: zoom-out; }
+  #viewer img { max-width: 95vw; max-height: 95vh; box-shadow: 0 4px 24px rgba(0,0,0,.15); }
+
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.3); display: none; align-items: center; justify-content: center; z-index: 20; }
+  .modal.show { display: flex; }
+  .modal-box { background: var(--panel); border-radius: 10px; padding: 24px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,.2); }
+  .card, .provider-card, .stat-box, .admin-user, .modal-box { border-radius: 16px; box-shadow: 0 4px 16px rgba(0,0,0,.08); }
+  html.dark .card, html.dark .provider-card, html.dark .stat-box, html.dark .admin-user, html.dark .modal-box { box-shadow: 0 4px 16px rgba(0,0,0,.35); }
+  #providerList.ios-group { background: var(--panel); border-radius: 16px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,.08); }
+  #providerList.ios-group .provider-card { background: transparent; border: none; border-radius: 0; box-shadow: none; margin-bottom: 0; }
+  #providerList.ios-group .provider-card + .provider-card { border-top: 1px solid var(--line); }
+  html.dark #providerList.ios-group { box-shadow: 0 4px 16px rgba(0,0,0,.35); }
+  .stat-box { border: none; }
+  .stat-box.tint-blue { background: rgba(37,99,235,.1); }
+  .stat-box.tint-blue .stat-num { color: var(--accent); }
+  .stat-box.tint-green { background: rgba(22,163,74,.1); }
+  .stat-box.tint-green .stat-num { color: var(--ok); }
+  .stat-box.tint-orange { background: rgba(234,88,12,.1); }
+  .stat-box.tint-orange .stat-num { color: #ea580c; }
+  .stat-box.tint-purple { background: rgba(147,51,234,.1); }
+  .stat-box.tint-purple .stat-num { color: #9333ea; }
+  html.dark .stat-box.tint-orange .stat-num { color: #fb923c; }
+  html.dark .stat-box.tint-purple .stat-num { color: #c084fc; }
+  .modal-head { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
+  .modal-close { position: absolute; top: 16px; right: 16px; background: none; border: none; color: var(--sub); cursor: pointer; font-size: 20px; }
+
+  .profile-section { text-align: center; margin-bottom: 24px; }
+  .profile-avatar-display { width: 80px; height: 80px; border-radius: 50%; margin: 0 auto 12px; border: 2px solid var(--line); background-size: cover; background-position: center; }
+  .profile-avatar-display.empty { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 32px; font-weight: bold; }
+  .profile-name { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  .profile-email { font-size: 13px; color: var(--sub); }
+
+  @media (max-width: 800px) {
+    .app-body { grid-template-columns: 1fr; }
+    aside { border-right: none; border-bottom: 1px solid var(--line); }
+    input, select, textarea { font-size: 16px; }
+    .topbar { flex-wrap: wrap; padding: 12px 16px; }
+    .topbar-left { width: 100%; order: 1; }
+    .topbar-right { order: 2; }
+  }
+</style>
+</head>
+<body>
+<div style="max-width: 720px; margin: 0 auto; padding: 16px 20px;">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+    <h1 style="margin: 0;">管理后台</h1>
+    <a href="./" style="font-size: 13px; color: var(--accent);">← 回绘乐坊</a>
+  </div>
+  <div class="msg" id="gateMsg"></div>
+  <div id="adminBody" class="hidden">
+    <div class="stat-grid">
+      <div class="stat-box tint-blue"><div class="stat-num" id="statUsers">—</div><div class="stat-label">注册人数</div></div>
+      <div class="stat-box tint-green"><div class="stat-num" id="statOnline">—</div><div class="stat-label">当前在线</div></div>
+      <div class="stat-box tint-orange"><div class="stat-num" id="statToday">—</div><div class="stat-label">今日生图</div></div>
+      <div class="stat-box tint-purple"><div class="stat-num" id="statTotal">—</div><div class="stat-label">累计生图</div></div>
+    </div>
+    <button id="adminRefreshBtn" class="secondary" style="margin: 4px 0 12px;">刷新</button>
+    <h2>用户列表</h2>
+    <div id="adminUserList" style="font-size: 13px;"></div>
+    <h2>安全日志</h2>
+    <div id="adminSecurityList" style="font-size: 13px;"></div>
+    <h2>最近操作</h2>
+    <div id="adminActivityList" style="font-size: 13px;"></div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://xmwgwldhzhdsgklmvgpg.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_ZTfPpyiMKJLe9POArBS4OQ_Akd8SPQu';
+const SIGNED_URL_TTL = 604800;
+const $ = id => document.getElementById(id);
+function escapeHtml(text) {
+  const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+  return String(text ?? '').replace(/[&<>"']/g, m => map[m]);
+}
+function setMsg(el, text, type = '') { el.textContent = text; el.className = 'msg' + (type ? ' ' + type : ''); }
+
+let sb, currentUser, myRole = 'user', presenceChannel = null;
+
+// 深色模式跟着主站走（存在本机）
+if (localStorage.getItem('imggen-theme') === 'dark') document.documentElement.classList.add('dark');
+
+// 安全日志：只有管理员能看，普通用户只能记自己的一行
+async function logSecurity(action, detail = '') {
+  if (!currentUser) return;
+  try {
+    await sb.from('security_log').insert({ user_id: currentUser.id, email: currentUser.email, action, detail });
+  } catch (e) {}
+}
+
+async function getViewUrl(record) {
+  if (record.image_url) return record.image_url;
+  if (record.image_path) {
+    try {
+      const { data } = await sb.storage.from('images').createSignedUrl(record.image_path, SIGNED_URL_TTL);
+      return data ? data.signedUrl : '';
+    } catch (e) { return ''; }
+  }
+  return '';
+}
+
+async function loadAdmin() {
+  if (myRole !== 'admin' && myRole !== 'super_admin') return;
+  const { count: userCount } = await sb.from('profiles').select('id', { count: 'exact', head: true });
+  $('statUsers').textContent = userCount ?? '—';
+  const { count: totalGen } = await sb.from('generations').select('id', { count: 'exact', head: true });
+  $('statTotal').textContent = totalGen ?? '—';
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const { count: todayGen } = await sb.from('generations').select('id', { count: 'exact', head: true }).gte('created_at', today.toISOString());
+  $('statToday').textContent = todayGen ?? '—';
+  const onlineEl = $('statOnline');
+  if (onlineEl && presenceChannel) onlineEl.textContent = Object.keys(presenceChannel.presenceState()).length;
+
+  const { data: users } = await sb.from('profiles').select('id, email, role, created_at').order('created_at', { ascending: true });
+  const list = $('adminUserList');
+  list.innerHTML = '';
+  (users || []).forEach(u => {
+    const row = document.createElement('div');
+    row.className = 'admin-user';
+    const isSelf = u.id === currentUser.id;
+    const roleName = u.role === 'super_admin' ? '最高管理者' : u.role === 'admin' ? '管理员' : '用户';
+    row.innerHTML = `
+      <div class="row1">
+        <div><strong>${escapeHtml(u.email || u.id.slice(0, 8))}</strong> <span class="role-badge ${u.role}">${roleName}</span></div>
+        ${myRole === 'super_admin' && !isSelf && u.role !== 'super_admin' ? `<select class="role-select" title="下发权限">
+          <option value="user"${u.role === 'user' ? ' selected' : ''}>用户</option>
+          <option value="admin"${u.role === 'admin' ? ' selected' : ''}>管理员</option>
+        </select>` : ''}
+      </div>
+      <div style="color: var(--sub); margin-top: 4px;">注册：${new Date(u.created_at).toLocaleString()} · 生图：<span class="gen-count">…</span> 张</div>
+      <div style="margin-top: 6px;"><button class="secondary show-gens">生图记录</button></div>
+      <div class="admin-gens hidden"></div>`;
+    list.append(row);
+    sb.from('generations').select('id', { count: 'exact', head: true }).eq('user_id', u.id).then(({ count }) => {
+      const el = row.querySelector('.gen-count');
+      if (el) el.textContent = count ?? 0;
+    });
+    const sel = row.querySelector('.role-select');
+    if (sel) sel.onchange = async () => {
+      const { error } = await sb.from('profiles').update({ role: sel.value }).eq('id', u.id);
+      if (error) { setMsg($('gateMsg'), '权限下发失败', 'error'); sel.value = u.role; return; }
+      logSecurity('role_change', (u.email || '') + ' → ' + (sel.value === 'admin' ? '管理员' : '用户'));
+      setMsg($('gateMsg'), '已把 ' + (u.email || '') + ' 设为' + (sel.value === 'admin' ? '管理员' : '用户'), 'ok');
+      loadAdmin();
+    };
+    const btn = row.querySelector('.show-gens');
+    const box = row.querySelector('.admin-gens');
+    btn.onclick = async () => {
+      if (!box.classList.contains('hidden')) { box.classList.add('hidden'); btn.textContent = '生图记录'; return; }
+      btn.textContent = '加载中…';
+      const { data: gens } = await sb.from('generations').select('id, prompt, model, size, image_path, image_url, created_at').eq('user_id', u.id).order('created_at', { ascending: false }).limit(20);
+      box.innerHTML = '';
+      if (!gens || gens.length === 0) box.innerHTML = '<div style="color: var(--sub); padding: 6px 0;">还没有生图记录</div>';
+      for (const g of gens || []) {
+        const url = await getViewUrl(g);
+        const item = document.createElement('div');
+        item.style.cssText = 'margin-top: 8px;';
+        item.innerHTML = `<div style="font-size: 12px; color: var(--sub);">${g.model || ''} · ${g.size || ''} · ${new Date(g.created_at).toLocaleString()}</div><div style="font-size: 12px; margin: 2px 0;">${escapeHtml(g.prompt || '')}</div>`;
+        if (url) {
+          const im = document.createElement('img');
+          im.src = url;
+          im.onclick = () => window.open(url, '_blank');
+          item.prepend(im);
+        }
+        box.append(item);
+      }
+      box.classList.remove('hidden');
+      btn.textContent = '收起记录';
+    };
+  });
+
+  // 安全日志（最新 50 条）
+  const secBox = $('adminSecurityList');
+  try {
+    const { data: secs, error: secErr } = await sb.from('security_log').select('email, action, detail, created_at').order('created_at', { ascending: false }).limit(50);
+    if (secErr) throw secErr;
+    secBox.innerHTML = '';
+    const secName = { admin_attempt: '试图进后台', admin_open: '进入后台', role_change: '改角色', mfa_enroll: '开启二次验证', mfa_unenroll: '关闭二次验证', mfa_fail: '二次验证失败', login: '登录' };
+    (secs || []).forEach(a => {
+      const d = document.createElement('div');
+      d.className = 'admin-act';
+      d.textContent = `${new Date(a.created_at).toLocaleString()} · ${a.email || ''} · ${secName[a.action] || a.action}${a.detail ? ' · ' + a.detail : ''}`;
+      secBox.append(d);
+    });
+    if (!secs || secs.length === 0) secBox.innerHTML = '<div style="color: var(--sub);">暂无安全记录</div>';
+  } catch (e) {
+    secBox.innerHTML = '<div style="color: var(--sub);">安全日志表还没建好（等 SQL 跑完就有了）</div>';
+  }
+
+  const { data: acts } = await sb.from('activity_log').select('email, action, detail, created_at').order('created_at', { ascending: false }).limit(50);
+  const actBox = $('adminActivityList');
+  actBox.innerHTML = '';
+  const actionName = { login: '登录', generate: '生图', delete: '删除' };
+  (acts || []).forEach(a => {
+    const d = document.createElement('div');
+    d.className = 'admin-act';
+    d.textContent = `${new Date(a.created_at).toLocaleString()} · ${a.email || ''} · ${actionName[a.action] || a.action}${a.detail ? ' · ' + a.detail : ''}`;
+    actBox.append(d);
+  });
+  if (!acts || acts.length === 0) actBox.innerHTML = '<div style="color: var(--sub);">暂无操作记录</div>';
+}
+
+$('adminRefreshBtn').onclick = () => loadAdmin();
+
+// 入口守门：没登录 → 请先登录；登录了但不是管理员 → 记一笔并挡住
+(async () => {
+  if (!window.supabase) { setMsg($('gateMsg'), 'Supabase 加载失败', 'error'); return; }
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session?.user) { setMsg($('gateMsg'), '请先在绘乐坊登录，再打开本页。', 'error'); return; }
+  currentUser = session.user;
+  try {
+    const { data } = await sb.from('profiles').select('role').eq('id', currentUser.id).maybeSingle();
+    myRole = data?.role || 'user';
+  } catch (e) { myRole = 'user'; }
+  if (myRole !== 'admin' && myRole !== 'super_admin') {
+    setMsg($('gateMsg'), '没有管理权限', 'error');
+    logSecurity('admin_attempt', '直接打开 admin.html');
+    return;
+  }
+  logSecurity('admin_open', '');
+  $('adminBody').classList.remove('hidden');
+  presenceChannel = sb.channel('online-users', { config: { presence: { key: currentUser.id } } });
+  presenceChannel.on('presence', { event: 'sync' }, () => {
+    const el = $('statOnline');
+    if (el) el.textContent = Object.keys(presenceChannel.presenceState()).length;
+  });
+  presenceChannel.subscribe(async (status) => {
+    if (status === 'SUBSCRIBED') {
+      try { await presenceChannel.track({ online_at: new Date().toISOString() }); } catch (e) {}
+    }
+  });
+  loadAdmin();
+})();
+</script>
+</body>
+</html>
