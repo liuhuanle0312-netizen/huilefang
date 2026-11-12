@@ -21,6 +21,7 @@
     --soft-hover: #e5e7eb;
     --softest: #f9fafb;
     --viewer-bg: rgba(255,255,255,.92);
+    --panel-glass: rgba(255,255,255,.8);
   }
   html.dark {
     --bg: #111827;
@@ -37,6 +38,7 @@
     --soft-hover: #4b5563;
     --softest: #111827;
     --viewer-bg: rgba(0,0,0,.88);
+    --panel-glass: rgba(31,41,55,.8);
   }
   * { box-sizing: border-box; }
   body { margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); }
@@ -74,9 +76,10 @@
 
   .app-wrap { display: flex; flex-direction: column; min-height: 100vh; }
   
-  .brand-bar { background: var(--panel); padding: 16px 20px 4px; font-size: 20px; font-weight: 700; color: var(--text); }
+  .brand-bar { background: var(--panel); padding: 16px 20px 4px; font-size: 20px; font-weight: 700; color: var(--text); display: flex; justify-content: space-between; align-items: center; }
+  .brand-right { display: flex; align-items: center; gap: 12px; }
 
-  .topbar { background: var(--panel); border-bottom: 1px solid var(--line); padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+  .topbar { background: var(--panel-glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 5; }
   .topbar-left { display: flex; align-items: center; gap: 8px; flex: 1; }
   .topbar-right { display: flex; align-items: center; gap: 12px; }
   .topbar button { padding: 6px 12px; font-size: 13px; white-space: nowrap; }
@@ -106,6 +109,8 @@
   .role-badge.admin { background: rgba(37, 99, 235, .12); color: var(--accent); }
   .admin-act { padding: 6px 0; border-bottom: 1px solid var(--line); }
   .admin-gens img { width: 100%; max-height: 160px; object-fit: contain; border-radius: 6px; background: var(--soft); cursor: zoom-in; }
+  #aboutView, #providersView, #generateView, #adminView, #mainContent { animation: fadeIn .25s ease; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
   .provider-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
   .provider-name { font-weight: 500; color: var(--text); }
   .provider-info { font-size: 12px; color: var(--sub); line-height: 1.5; }
@@ -230,7 +235,7 @@
 <div id="viewApp" class="hidden">
   <div class="app-wrap">
     <!-- 品牌栏 -->
-    <div class="brand-bar">绘乐坊</div>
+    <div class="brand-bar"><span>绘乐坊</span><div class="brand-right"><button id="themeToggle" class="secondary" title="深色模式" style="padding: 6px 10px;">🌙</button><button id="avatarBtn" class="avatar-btn" title="个人资料"></button></div></div>
 
     <!-- 顶部导航栏 -->
     <div class="topbar">
@@ -239,10 +244,6 @@
         <button id="btnProviders" class="secondary active">模型接入</button>
         <button id="btnGenerate" class="secondary">图片生成</button>
         <button id="btnAdmin" class="secondary hidden">管理后台</button>
-      </div>
-      <div class="topbar-right">
-        <button id="themeToggle" class="secondary" title="深色模式" style="padding: 6px 10px;">🌙</button>
-        <button id="avatarBtn" class="avatar-btn" title="个人资料"></button>
       </div>
     </div>
 
@@ -456,6 +457,22 @@
   </div>
 </div>
 
+<!-- 新手引导：第一次登录弹三步提示 -->
+<div id="modalOnboard" class="modal">
+  <div class="modal-box">
+    <div class="modal-head">第一次用？三步就好</div>
+    <div style="font-size: 14px; line-height: 2;">
+      <p>1️⃣ 先去「模型接入」，填你的中转站地址和 Key。</p>
+      <p>2️⃣ 回到「图片生成」，选供应商和模型，写提示词点生成。</p>
+      <p>3️⃣ 生成的图片存在「历史图片」里，点开能下载、复用提示词、继续改。</p>
+    </div>
+    <div class="row" style="margin-top: 16px;">
+      <button class="primary" id="onboardOkBtn" style="flex: 1;">知道了</button>
+      <button class="secondary" id="onboardNeverBtn" style="flex: 1;">不再提示</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const SUPABASE_URL = 'https://xmwgwldhzhdsgklmvgpg.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_ZTfPpyiMKJLe9POArBS4OQ_Akd8SPQu';
@@ -492,6 +509,38 @@ function show(view) {
 }
 function setMsg(el, text, type = '') { el.textContent = text; el.className = 'msg' + (type ? ' ' + type : ''); }
 function setStatus(text, isError = false) { setMsg($('status'), text, isError ? 'error' : ''); }
+
+// 报错翻译成人话
+function friendlyError(e) {
+  const raw = (e && e.message) || String(e || '');
+  const m = raw.match(/HTTP (\d{3})/);
+  const code = m ? +m[1] : 0;
+  if (e instanceof TypeError || /Failed to fetch|NetworkError|network/i.test(raw)) return '网络出问题了，检查网络再试（也可能是跨域）';
+  if (e && e.name === 'AbortError') return '请求超时了，再试一次';
+  if (code === 401) return 'Key 不对或已失效，去模型接入里检查 Key';
+  if (code === 403) return '没有权限，可能是 Key 没开通这个模型';
+  if (code === 404) return '接口地址不对，检查供应商的 API 地址';
+  if (code === 429) return '请求太频繁了，等一会儿再试';
+  if (code === 400) {
+    if (/content_policy|safety|moderation/i.test(raw)) return '提示词可能违规，换个说法再试';
+    if (/not supported|unsupported/i.test(raw)) return '这个模型不支持这个接口，换个模型试试';
+    return '请求被拒绝了：' + raw;
+  }
+  if (code >= 500) return '中转站那边出问题了（HTTP ' + code + '），等一会儿再试';
+  return raw || '出错了，再试一次';
+}
+
+// 新手引导：第一次登录弹三步提示，“知道了”只关这一次，“不再提示”以后都不弹
+function maybeShowOnboard() {
+  if (!currentUser) return;
+  if (localStorage.getItem('imggen-onboarded-' + currentUser.id)) return;
+  openModal('modalOnboard');
+}
+$('onboardOkBtn').onclick = () => closeModal('modalOnboard');
+$('onboardNeverBtn').onclick = () => {
+  localStorage.setItem('imggen-onboarded-' + currentUser.id, '1');
+  closeModal('modalOnboard');
+};
 function openModal(id) { $(id).classList.add('show'); }
 function closeModal(id) { $(id).classList.remove('show'); }
 
@@ -593,6 +642,7 @@ function enterApp(user) {
   checkAdminRole();
   startPresence();
   logActivity('login');
+  maybeShowOnboard();
 }
 
 function showTab(tab) {
@@ -955,6 +1005,7 @@ function updateModelList() {
   }).catch(e => {
     modelSel.innerHTML = '<option value="">加载失败</option>';
     modelSel.disabled = false;
+    setStatus(friendlyError(e));
   });
 }
 
@@ -1734,9 +1785,7 @@ $('genBtn').onclick = async () => {
   } catch (e) {
     stopSimProgress();
     clearInterval(genProgressTimer);
-    let msg = e.message;
-    if (e instanceof TypeError) msg += '（网络问题或跨域）';
-    setMsg($('genMsg'), msg, 'error');
+    setMsg($('genMsg'), friendlyError(e), 'error');
   } finally {
     btn.disabled = false;
     clearInterval(genProgressTimer);
