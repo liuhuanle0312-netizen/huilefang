@@ -133,6 +133,9 @@
 
   .provider-list { margin-top: 16px; }
   .provider-card { background: var(--softest); border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin-bottom: 8px; }
+  .drag-handle { cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; color: var(--sub); font-size: 15px; padding: 2px 4px; flex-shrink: 0; }
+  .drag-handle:active { cursor: grabbing; }
+  .provider-card.dragging { opacity: .55; }
   .provider-tools { margin-top: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .provider-tools button { padding: 4px 10px; font-size: 12px; }
   .stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 12px 0; }
@@ -655,6 +658,7 @@ let generating = false;
 let refImages = [];
 let genProgressValue = 0, genSimTimer = null;
 const PROVIDER_STORE_KEY = 'imggen-providers';
+const PROVIDER_ORDER_KEY = 'imggen-provider-order';
 const PROFILE_STORE_KEY = 'imggen-profile';
 
 function show(view) {
@@ -720,9 +724,17 @@ if (SUPABASE_URL.includes('你的项目') || !window.supabase) {
       if (recovering) return;
       const user = session?.user || null;
       if (user && user.id !== currentUser?.id) enterApp(user);
-      else if (!user) { currentUser = null; show('viewAuth'); updateMaintBar(); }
+      else if (!user) { const wasIn = !!currentUser; currentUser = null; show('viewAuth'); updateMaintBar(); if (wasIn) setMsg($('authMsg'), '登录已过期，请重新登录', 'error'); }
     }, 0);
   });
+}
+
+// 登录过期：自动回登录页并提示
+function showLoginExpired() {
+  currentUser = null;
+  show('viewAuth');
+  updateMaintBar();
+  setMsg($('authMsg'), '登录已过期，请重新登录', 'error');
 }
 
 function setTab(signup) {
@@ -1190,9 +1202,25 @@ function saveProviders() {
   updateSupplierOptions();
 }
 
-// 供应商按上次使用时间排：最近用过的在最上面，没用过的按原来顺序在后
+// 供应商手动顺序：拖过一次才有，没拖过按上次使用时间排
+function loadProviderOrder() {
+  if (!currentUser) return null;
+  try { const o = JSON.parse(localStorage.getItem(PROVIDER_ORDER_KEY + '-' + currentUser.id) || 'null'); return Array.isArray(o) ? o : null; } catch (e) { return null; }
+}
+function saveProviderOrder(ids) {
+  if (!currentUser) return;
+  localStorage.setItem(PROVIDER_ORDER_KEY + '-' + currentUser.id, JSON.stringify(ids));
+}
 function sortedProviderIds() {
-  return Object.keys(providers).sort((a, b) => (providers[b].lastUsed || 0) - (providers[a].lastUsed || 0));
+  const order = loadProviderOrder();
+  const ids = Object.keys(providers);
+  if (!order || !order.length) return ids.sort((a, b) => (providers[b].lastUsed || 0) - (providers[a].lastUsed || 0));
+  const rank = new Map(order.map((id, i) => [id, i]));
+  return ids.sort((a, b) => {
+    const ra = rank.has(a) ? rank.get(a) : 1e9, rb = rank.has(b) ? rank.get(b) : 1e9;
+    if (ra !== rb) return ra - rb;
+    return (providers[b].lastUsed || 0) - (providers[a].lastUsed || 0);
+  });
 }
 // 正在用的供应商，在设置列表里用渐变边框标出来
 function markSelectedProvider() {
@@ -1250,7 +1278,7 @@ function renderProviders() {
     card.dataset.pid = id;
     card.innerHTML = `
       <div class="provider-head">
-        <div style="display: flex; align-items: center; gap: 8px;"><span class="status-dot" title="未测速"></span><div class="provider-name">${escapeHtml(p.name)}</div></div>
+        <div style="display: flex; align-items: center; gap: 8px;"><span class="drag-handle" title="按住拖动排序">⋮⋮</span><span class="status-dot" title="未测速"></span><div class="provider-name">${escapeHtml(p.name)}</div></div>
         <div class="provider-actions">
           <button onclick="editProvider('${id}')">编辑</button>
           <button onclick="deleteProvider('${id}')" style="color: var(--danger);">删除</button>
@@ -1267,9 +1295,45 @@ function renderProviders() {
       </div>
     `;
     list.append(card);
+    card.querySelector('.drag-handle').addEventListener('pointerdown', (e) => startProviderDrag(e, card));
   });
   markSelectedProvider();
   loadModelCounts();
+}
+
+// 供应商拖动排序：按住手柄拖动，松手后保存新顺序
+let providerDrag = null;
+function startProviderDrag(e, card) {
+  if (e.button != null && e.button !== 0) return;
+  e.preventDefault();
+  const handle = e.currentTarget;
+  try { handle.setPointerCapture(e.pointerId); } catch (err) {}
+  providerDrag = { card, pointerId: e.pointerId };
+  card.classList.add('dragging');
+  const move = (ev) => {
+    if (!providerDrag || ev.pointerId !== providerDrag.pointerId) return;
+    const el = document.elementFromPoint(ev.clientX, ev.clientY);
+    const over = el && el.closest ? el.closest('#providerList .provider-card') : null;
+    if (!over || over === card) return;
+    const r = over.getBoundingClientRect();
+    const list = $('providerList');
+    if (ev.clientY < r.top + r.height / 2) list.insertBefore(card, over);
+    else list.insertBefore(card, over.nextSibling);
+  };
+  const up = (ev) => {
+    if (!providerDrag || ev.pointerId !== providerDrag.pointerId) return;
+    handle.removeEventListener('pointermove', move);
+    handle.removeEventListener('pointerup', up);
+    handle.removeEventListener('pointercancel', up);
+    card.classList.remove('dragging');
+    providerDrag = null;
+    const ids = [...$('providerList').querySelectorAll('.provider-card')].map(c => c.dataset.pid);
+    saveProviderOrder(ids);
+    renderProviders();
+  };
+  handle.addEventListener('pointermove', move);
+  handle.addEventListener('pointerup', up);
+  handle.addEventListener('pointercancel', up);
 }
 
 function editProvider(id) {
@@ -1287,6 +1351,8 @@ function editProvider(id) {
 function deleteProvider(id) {
   if (!confirm('确定删除这个中转站吗？')) return;
   delete providers[id];
+  const order = loadProviderOrder();
+  if (order) saveProviderOrder(order.filter(x => x !== id));
   saveProviders();
   renderProviders();
 }
@@ -1314,6 +1380,10 @@ function submitProvider(editId) {
   const id = editId || 'provider-' + Date.now();
   const remember = $('providerRemember').checked;
   providers[id] = { name, url, key: remember ? key : '', _hidden: !remember };
+  if (!editId) {
+    const order = loadProviderOrder();
+    if (order && !order.includes(id)) { order.push(id); saveProviderOrder(order); }
+  }
   saveProviders();
   renderProviders();
   closeModal('modalProvider');
@@ -2049,7 +2119,11 @@ async function loadHistory() {
     .range(historyOffset, historyOffset + PAGE_SIZE - 1);
   $('loadMore').disabled = false;
   
-  if (error) return setStatus('读取失败', true);
+  if (error) {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return showLoginExpired();
+    return setStatus('读取失败', true);
+  }
 
   const paths = data.filter(r => r.image_path && !r.image_path.startsWith('r2:')).map(r => r.image_path);
   const signed = {};
@@ -2276,6 +2350,8 @@ window.addEventListener('beforeunload', (e) => {
 });
 
 $('genBtn').onclick = async () => {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) { showLoginExpired(); return; }
   if (await fetchMaintenance()) { updateMaintBar(); return setMsg($('genMsg'), '网站维护中，暂停生成，稍后再试', 'error'); }
   const supplierId = $('genSupplier').value;
   const model = $('genModel').value;
