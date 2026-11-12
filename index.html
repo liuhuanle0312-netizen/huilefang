@@ -104,7 +104,6 @@
   .provider-card { background: var(--softest); border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin-bottom: 8px; }
   .provider-tools { margin-top: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .provider-tools button { padding: 4px 10px; font-size: 12px; }
-  .swipe-hint { text-align: center; font-size: 11px; color: var(--sub); padding: 2px 0; }
   .stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 12px 0; }
   .stat-box { background: var(--softest); border: 1px solid var(--line); border-radius: 8px; padding: 12px 8px; text-align: center; }
   .stat-num { font-size: 22px; font-weight: 700; }
@@ -126,16 +125,20 @@
 
   .gen-section { margin-bottom: 20px; }
   .gen-label { font-size: 12px; color: var(--sub); margin-bottom: 6px; font-weight: 500; }
-  .ratio-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-  .ratio-card { border: 1px solid var(--line); border-radius: 8px; padding: 10px 4px 8px; text-align: center; cursor: pointer; background: var(--panel); transition: border-color .15s, background-color .15s; }
+  .ratio-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .ratio-card { border: 1px solid var(--line); border-radius: 8px; padding: 6px 4px 5px; text-align: center; cursor: pointer; background: var(--panel); transition: border-color .15s, background-color .15s; }
   .ratio-card:hover { border-color: var(--accent); }
   .ratio-card.active { border-color: var(--accent); background: rgba(37, 99, 235, 0.08); color: var(--accent); }
-  .ratio-shape-wrap { height: 40px; display: flex; align-items: center; justify-content: center; margin-bottom: 6px; }
-  .ratio-shape { width: 34px; height: 24px; margin: 0; border: 2px solid #6b7280; border-radius: 3px; }
+  .ratio-shape-wrap { height: 30px; display: flex; align-items: center; justify-content: center; margin-bottom: 4px; }
+  .ratio-shape { width: 34px; height: 24px; margin: 0; border: 2px solid #6b7280; border-radius: 3px; transform: scale(.8); }
   .tier-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-  .tier-chip { border: 1px solid var(--line); border-radius: 8px; padding: 10px 2px; text-align: center; cursor: pointer; background: var(--panel); font-size: 12px; color: var(--text); transition: border-color .15s, background-color .15s; }
+  .tier-chip { border: 1px solid var(--line); border-radius: 8px; padding: 6px 2px; text-align: center; cursor: pointer; background: var(--panel); font-size: 12px; color: var(--text); transition: border-color .15s, background-color .15s; }
   .tier-chip:hover { border-color: var(--accent); }
   .tier-chip.active { border-color: var(--accent); background: rgba(37, 99, 235, 0.08); color: var(--accent); font-weight: 600; }
+  #tierSection, #ratioSection { margin-bottom: 12px; }
+  .skeleton-img { height: 200px; background: linear-gradient(90deg, var(--soft) 25%, var(--soft-hover) 50%, var(--soft) 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite linear; }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  #genPrompt { max-height: 200px; overflow-y: auto; }
   .select-box-trigger.disabled { opacity: .45; cursor: not-allowed; }
   .ratio-card.active .ratio-shape { border-color: var(--accent); }
   .ratio-name { font-size: 13px; font-weight: 600; }
@@ -271,8 +274,6 @@
       </div>
     </div>
 
-    <div class="swipe-hint">← 左右滑动切换页面 →</div>
-
     <div class="app-body" id="appBody">
       <!-- 侧栏 -->
       <aside id="sidebar">
@@ -290,6 +291,7 @@
             </ul>
             <p style="margin-top: 16px;"><strong>开始使用</strong></p>
             <p>先在「模型接入」里添加你的 API Key，然后切到「图片生成」开始创作。</p>
+            <p><a href="#" onclick="openModal('modalOnboard'); return false;">详细说明 →</a></p>
           </div>
         </div>
 
@@ -329,7 +331,7 @@
             <button class="secondary" id="refAddBtn" style="width: 100%; margin-top: 8px;">＋ 添加参考图</button>
           </div>
 
-          <div class="gen-section">
+          <div class="gen-section" id="ratioSection">
             <div class="gen-label">比例 / 尺寸</div>
             <div class="ratio-grid" id="sizeOptions">
               <div class="ratio-card active" data-ratio="auto"><div class="ratio-shape-wrap"><div class="ratio-shape" style="display:flex;align-items:center;justify-content:center;font-size:11px;border-style:dashed;">auto</div></div><div class="ratio-name">自动</div><div class="ratio-sub">模型决定</div></div>
@@ -484,11 +486,15 @@
 <!-- 新手引导：第一次登录弹三步提示 -->
 <div id="modalOnboard" class="modal">
   <div class="modal-box">
-    <div class="modal-head">第一次用？三步就好</div>
-    <div style="font-size: 14px; line-height: 2;">
-      <p>1️⃣ 先去「模型接入」，填你的中转站地址和 Key。</p>
-      <p>2️⃣ 回到「图片生成」，选供应商和模型，写提示词点生成。</p>
-      <p>3️⃣ 生成的图片存在「历史图片」里，点开能下载、复用提示词、继续改。</p>
+    <div class="modal-head">使用说明</div>
+    <div style="font-size: 14px; line-height: 1.9;">
+      <p><b>1. 添加中转站</b><br>点「模型接入」→「＋ 添加中转站」，填名称（随便起，比如“吉吉”）、接口地址（比如 https://api.jiji.cc，结尾不要加 /v1，系统会自动补）和 API Key（从中转站网站复制），点保存。可以加多个中转站，Key 只存在这台手机的浏览器里。</p>
+      <p><b>2. 选供应商和模型</b><br>回到「图片生成」，先选供应商，再选模型。第一次用建议选 gpt-image-2.6-sunburst。</p>
+      <p><b>3. 写提示词</b><br>在提示词框里描述想要的画面，越具体越好，比如“一只橘猫坐在窗台上，下午阳光，写实照片”。</p>
+      <p><b>4. 选比例和画质</b><br>比例选自动（由模型决定）或想要的尺寸；画质分低、中、高，越高越清晰也越慢；比例不是自动时，还能再选 HD / FHD / QHD / 4K 档位。</p>
+      <p><b>5. 参考图（可选）</b><br>点「＋ 添加参考图」，最多 5 张，生成时会按参考图来改图。</p>
+      <p><b>6. 生成</b><br>点「生成」，等进度走完，图片就出现在下方的历史里。点开大图可以下载、复用提示词、继续改。</p>
+      <p><b>7. 历史和账号</b><br>生成过的图都存在云端，换手机登录后历史还在；但 API Key 只存在当前手机浏览器里，换手机要重新填。右上角头像可以改昵称和头像，月亮/太阳切换深色模式，左右滑动可以切换页面。</p>
     </div>
     <div class="row" style="margin-top: 16px;">
       <button class="primary" id="onboardOkBtn" style="flex: 1;">知道了</button>
@@ -562,7 +568,7 @@ function friendlyError(e) {
   return raw || '出错了，再试一次';
 }
 
-// 新手引导：第一次登录弹三步提示，“知道了”只关这一次，“不再提示”以后都不弹
+// 新手引导：第一次登录弹使用说明，“知道了”只关这一次，“不再提示”以后都不弹
 function maybeShowOnboard() {
   if (!currentUser) return;
   if (localStorage.getItem('imggen-onboarded-' + currentUser.id)) return;
@@ -849,7 +855,7 @@ async function loadAdmin() {
         if (url) {
           const im = document.createElement('img');
           im.src = url;
-          im.onclick = () => { $('viewer').querySelector('img').src = url; $('viewer').style.display = 'flex'; };
+          im.onclick = () => openViewer(url);
           item.prepend(im);
         }
         box.append(item);
@@ -1615,7 +1621,7 @@ function addCard(record, src, atTop) {
     imgEl = document.createElement('img');
     imgEl.src = src;
     imgEl.loading = 'lazy';
-    imgEl.onclick = () => { $('viewer').querySelector('img').src = currentSrc; $('viewer').style.display = 'flex'; };
+    imgEl.onclick = () => openViewer(currentSrc);
     imgEl.onerror = async () => {
       // 链接过期是最常见的原因（之前签名只有 1 小时有效）：重新签发一次再试
       if (record.image_path && !imgEl.dataset.refreshed) {
@@ -1658,7 +1664,7 @@ function addCard(record, src, atTop) {
   
   if (src) {
     dl = document.createElement('a');
-    dl.textContent = '⬇️';
+    dl.textContent = '下载';
     dl.title = '下载';
     dl.href = src;
     const dlExt = src.startsWith('data:image/jpeg') ? 'jpg' : src.startsWith('data:image/gif') ? 'gif' : src.startsWith('data:image/svg+xml') ? 'svg' : src.startsWith('data:image/webp') ? 'webp' : 'png';
@@ -1668,10 +1674,11 @@ function addCard(record, src, atTop) {
   }
   
   const reuse = document.createElement('button');
-  reuse.textContent = '📝';
+  reuse.textContent = '复用提示词';
   reuse.title = '复用提示词';
   reuse.onclick = () => {
     $('genPrompt').value = record.prompt;
+    autoGrowPrompt();
     showTab('generate');
     $('genPrompt').focus();
   };
@@ -1680,7 +1687,7 @@ function addCard(record, src, atTop) {
   // 继续改：把这张图直接加进参考图，接着改
   if (src) {
     const cont = document.createElement('button');
-    cont.textContent = '✏️';
+    cont.textContent = '继续改';
     cont.title = '继续改';
     cont.onclick = async () => {
       if (refImages.length >= 5) return setStatus('参考图已满 5 张，先删一张再继续改', true);
@@ -1699,7 +1706,7 @@ function addCard(record, src, atTop) {
         setStatus(err.message || '加入参考图失败', true);
       } finally {
         cont.disabled = false;
-        cont.textContent = '✏️';
+        cont.textContent = '继续改';
       }
     };
     actions.append(cont);
@@ -1707,7 +1714,7 @@ function addCard(record, src, atTop) {
 
   if (record.id) {
     const del = document.createElement('button');
-    del.textContent = '🗑️';
+    del.textContent = '删除';
     del.title = '删除';
     del.className = 'danger';
     del.onclick = async () => {
@@ -1765,6 +1772,17 @@ $('genBtn').onclick = async () => {
   // 模拟进度：没真实数据时慢慢爬升，封顶 99
   startSimProgress();
 
+  // 生成中先放骨架占位卡，图回来再换成真图
+  const skeletons = [];
+  for (let i = 0; i < n; i++) {
+    const sk = document.createElement('div');
+    sk.className = 'card skeleton-card';
+    sk.innerHTML = '<div class="skeleton-img"></div><div class="meta">正在生成…</div>';
+    $('gallery').prepend(sk);
+    skeletons.push(sk);
+  }
+  updateEmpty();
+
   try {
     const useRef = refImages.length > 0;
     const urls = useRef
@@ -1793,6 +1811,8 @@ $('genBtn').onclick = async () => {
     const saves = urls.map(async (u) => {
       const meta = { prompt, model, mode: useRef ? 'images-ref' : 'images', size: selectedSize, gen_seconds: totalTime };
       // 生成完立刻在下面显示图片，不等上传存库
+      const sk = skeletons.shift();
+      if (sk) sk.remove();
       const placeholder = addCard({ ...meta, created_at: new Date().toISOString() }, u, true);
       historyOffset++;
       pendingSaves++;
@@ -1818,6 +1838,7 @@ $('genBtn').onclick = async () => {
       setMsg($('genMsg'), `有 ${errs.length} 张保存失败`, 'error');
     }
   } catch (e) {
+    skeletons.forEach(s => s.remove());
     stopSimProgress();
     clearInterval(genProgressTimer);
     setMsg($('genMsg'), friendlyError(e), 'error');
@@ -1833,11 +1854,44 @@ $('genBtn').onclick = async () => {
   }
 };
 
+// 提示词输入框自动增高（最多 200px，再多就内部滚动）
+function autoGrowPrompt() {
+  const t = $('genPrompt');
+  t.style.height = 'auto';
+  t.style.height = Math.min(t.scrollHeight, 200) + 'px';
+}
+$('genPrompt').addEventListener('input', autoGrowPrompt);
+
 $('genPrompt').addEventListener('keydown', e => {
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('genBtn').click();
 });
 
-$('viewer').onclick = () => $('viewer').style.display = 'none';
+function openViewer(url) {
+  const v = $('viewer');
+  v.querySelector('img').src = url;
+  v.style.display = 'flex';
+  tintViewerBg(url);
+}
+// 查看大图时背景取图片主色（取不到就用默认背景）
+function tintViewerBg(url) {
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    try {
+      const c = document.createElement('canvas');
+      c.width = 32; c.height = 32;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0, 32, 32);
+      const d = ctx.getImageData(0, 0, 32, 32).data;
+      let r = 0, g = 0, b = 0, n = 0;
+      for (let i = 0; i < d.length; i += 16) { r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; }
+      $('viewer').style.background = `rgb(${Math.round(r / n * 0.35)},${Math.round(g / n * 0.35)},${Math.round(b / n * 0.35)})`;
+    } catch (e) { /* 跨域取不到色就用默认背景 */ }
+  };
+  img.src = url;
+}
+
+$('viewer').onclick = () => { $('viewer').style.display = 'none'; $('viewer').style.background = ''; };
 $('modalProvider').onclick = (e) => {
   if (e.target === $('modalProvider')) closeModal('modalProvider');
 };
