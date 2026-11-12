@@ -1460,13 +1460,24 @@ async function refreshMfaStatus() {
 }
 $('mfaEnrollBtn').onclick = async () => {
   setMsg($('mfaMsg'), '');
+  const btn = $('mfaEnrollBtn');
+  btn.disabled = true;
   try {
     // 先清掉之前没验证完的旧因子，免得越积越多
     const { data: factors } = await sb.auth.mfa.listFactors();
     for (const f of (factors?.totp || [])) {
       if (f.status === 'unverified') { try { await sb.auth.mfa.unenroll({ factorId: f.id }); } catch (e) {} }
     }
-    const { data, error } = await sb.auth.mfa.enroll({ factorType: 'totp' });
+    // 名字带时间戳：连点两次也不会报“已经存在”；万一还报，再清一次、再试一次
+    let data, error;
+    ({ data, error } = await sb.auth.mfa.enroll({ factorType: 'totp', friendlyName: '绘乐坊-' + Date.now() }));
+    if (error && /already exists/i.test(error.message || '')) {
+      const { data: factors2 } = await sb.auth.mfa.listFactors();
+      for (const f of (factors2?.totp || [])) {
+        if (f.status === 'unverified') { try { await sb.auth.mfa.unenroll({ factorId: f.id }); } catch (e) {} }
+      }
+      ({ data, error } = await sb.auth.mfa.enroll({ factorType: 'totp', friendlyName: '绘乐坊-' + Date.now() }));
+    }
     if (error) throw error;
     mfaFactorId = data.id;
     $('mfaSecret').textContent = data.totp.secret;
@@ -1483,6 +1494,8 @@ $('mfaEnrollBtn').onclick = async () => {
     setMsg($('mfaMsg'), '密钥已生成，按上面步骤在验证器 App 里添加', 'ok');
   } catch (e) {
     setMsg($('mfaMsg'), '开启失败：' + (e.message || '未知错误'), 'error');
+  } finally {
+    btn.disabled = false;
   }
 };
 $('mfaConfirmBtn').onclick = async () => {
