@@ -76,8 +76,15 @@
 
   .app-wrap { display: flex; flex-direction: column; min-height: 100vh; }
   
-  .brand-bar { background: var(--panel); padding: 16px 20px 4px; font-size: 20px; font-weight: 700; color: var(--text); display: flex; justify-content: space-between; align-items: center; }
+  .brand-bar { background: var(--panel); padding: 16px 20px 4px; font-size: 20px; font-weight: 700; color: var(--text); display: flex; justify-content: space-between; align-items: center; transition: padding .25s ease; }
   .brand-right { display: flex; align-items: center; gap: 12px; }
+  .brand-bar .brand-name { font-size: 28px; transition: font-size .25s ease; }
+  body.scrolled .brand-bar .brand-name { font-size: 18px; }
+  body.scrolled .brand-bar { padding-top: 10px; padding-bottom: 2px; }
+  #themeToggle { transition: transform .45s ease; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #9ca3af; flex-shrink: 0; }
+  .status-dot.ok { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  .status-dot.bad { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
 
   .topbar { background: var(--panel-glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 5; }
   .topbar-left { display: flex; align-items: center; gap: 8px; flex: 1; }
@@ -168,12 +175,29 @@
   .empty { color: var(--sub); text-align: center; margin-top: 80px; }
   #loadMore { display: block; margin: 20px auto; }
 
-  #viewer { position: fixed; inset: 0; background: var(--viewer-bg); display: none; align-items: center; justify-content: center; z-index: 10; cursor: zoom-out; }
+  #viewer { position: fixed; inset: 0; background: var(--viewer-bg); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: none; align-items: center; justify-content: center; z-index: 10; cursor: zoom-out; }
   #viewer img { max-width: 95vw; max-height: 95vh; box-shadow: 0 4px 24px rgba(0,0,0,.15); }
 
   .modal { position: fixed; inset: 0; background: rgba(0,0,0,.3); display: none; align-items: center; justify-content: center; z-index: 20; }
   .modal.show { display: flex; }
   .modal-box { background: var(--panel); border-radius: 10px; padding: 24px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,.2); }
+  .card, .provider-card, .stat-box, .admin-user, .modal-box { border-radius: 16px; box-shadow: 0 4px 16px rgba(0,0,0,.08); }
+  html.dark .card, html.dark .provider-card, html.dark .stat-box, html.dark .admin-user, html.dark .modal-box { box-shadow: 0 4px 16px rgba(0,0,0,.35); }
+  #providerList.ios-group { background: var(--panel); border-radius: 16px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,.08); }
+  #providerList.ios-group .provider-card { background: transparent; border: none; border-radius: 0; box-shadow: none; margin-bottom: 0; }
+  #providerList.ios-group .provider-card + .provider-card { border-top: 1px solid var(--line); }
+  html.dark #providerList.ios-group { box-shadow: 0 4px 16px rgba(0,0,0,.35); }
+  .stat-box { border: none; }
+  .stat-box.tint-blue { background: rgba(37,99,235,.1); }
+  .stat-box.tint-blue .stat-num { color: var(--accent); }
+  .stat-box.tint-green { background: rgba(22,163,74,.1); }
+  .stat-box.tint-green .stat-num { color: var(--ok); }
+  .stat-box.tint-orange { background: rgba(234,88,12,.1); }
+  .stat-box.tint-orange .stat-num { color: #ea580c; }
+  .stat-box.tint-purple { background: rgba(147,51,234,.1); }
+  .stat-box.tint-purple .stat-num { color: #9333ea; }
+  html.dark .stat-box.tint-orange .stat-num { color: #fb923c; }
+  html.dark .stat-box.tint-purple .stat-num { color: #c084fc; }
   .modal-head { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
   .modal-close { position: absolute; top: 16px; right: 16px; background: none; border: none; color: var(--sub); cursor: pointer; font-size: 20px; }
 
@@ -235,7 +259,7 @@
 <div id="viewApp" class="hidden">
   <div class="app-wrap">
     <!-- 品牌栏 -->
-    <div class="brand-bar"><span>绘乐坊</span><div class="brand-right"><button id="themeToggle" class="secondary" title="深色模式" style="padding: 6px 10px;">🌙</button><button id="avatarBtn" class="avatar-btn" title="个人资料"></button></div></div>
+    <div class="brand-bar"><span class="brand-name">绘乐坊</span><div class="brand-right"><button id="themeToggle" class="secondary" title="深色模式" style="padding: 6px 10px;">🌙</button><button id="avatarBtn" class="avatar-btn" title="个人资料"></button></div></div>
 
     <!-- 顶部导航栏 -->
     <div class="topbar">
@@ -273,7 +297,7 @@
           <h1>模型接入</h1>
           <p style="font-size: 12px; color: var(--sub); margin: 0 0 12px;">管理你的中转站和 API Key</p>
           <button class="primary" id="addProviderBtn" style="margin-top: 0;">＋ 添加中转站</button>
-          <div class="provider-list" id="providerList"></div>
+          <div class="provider-list ios-group" id="providerList"></div>
           <div id="emptyProviders" class="empty" style="margin-top: 60px; font-size: 13px;">还没有添加中转站</div>
         </div>
 
@@ -384,10 +408,10 @@
         <div id="adminView" class="hidden">
           <h1>管理后台</h1>
           <div class="stat-grid">
-            <div class="stat-box"><div class="stat-num" id="statUsers">—</div><div class="stat-label">注册人数</div></div>
-            <div class="stat-box"><div class="stat-num" id="statOnline">—</div><div class="stat-label">当前在线</div></div>
-            <div class="stat-box"><div class="stat-num" id="statToday">—</div><div class="stat-label">今日生图</div></div>
-            <div class="stat-box"><div class="stat-num" id="statTotal">—</div><div class="stat-label">累计生图</div></div>
+            <div class="stat-box tint-blue"><div class="stat-num" id="statUsers">—</div><div class="stat-label">注册人数</div></div>
+            <div class="stat-box tint-green"><div class="stat-num" id="statOnline">—</div><div class="stat-label">当前在线</div></div>
+            <div class="stat-box tint-orange"><div class="stat-num" id="statToday">—</div><div class="stat-label">今日生图</div></div>
+            <div class="stat-box tint-purple"><div class="stat-num" id="statTotal">—</div><div class="stat-label">累计生图</div></div>
           </div>
           <button id="adminRefreshBtn" class="secondary" style="margin: 4px 0 12px;">刷新</button>
           <h2>用户列表</h2>
@@ -488,12 +512,20 @@ function applyTheme() {
   const t = $('themeToggle');
   if (t) t.textContent = dark ? '☀️' : '🌙';
 }
+let themeRot = 0;
 $('themeToggle').onclick = () => {
   const dark = !document.documentElement.classList.contains('dark');
   localStorage.setItem('imggen-theme', dark ? 'dark' : 'light');
   applyTheme();
+  themeRot += 360;
+  $('themeToggle').style.transform = `rotate(${themeRot}deg)`;
 };
 applyTheme();
+
+// 大标题随滚动缩小：往下滑超过 40px，品牌字从 28px 缩到 18px
+window.addEventListener('scroll', () => {
+  document.body.classList.toggle('scrolled', window.scrollY > 40);
+}, { passive: true });
 
 let sb, currentUser = null, recovering = false, signupMode = false, historyOffset = 0;
 let myRole = 'user';
@@ -889,7 +921,7 @@ function renderProviders() {
     card.className = 'provider-card';
     card.innerHTML = `
       <div class="provider-head">
-        <div class="provider-name">${escapeHtml(p.name)}</div>
+        <div style="display: flex; align-items: center; gap: 8px;"><span class="status-dot" title="未测速"></span><div class="provider-name">${escapeHtml(p.name)}</div></div>
         <div class="provider-actions">
           <button onclick="editProvider('${id}')">编辑</button>
           <button onclick="deleteProvider('${id}')" style="color: var(--danger);">删除</button>
@@ -1028,6 +1060,7 @@ async function fetchModels(provider) {
 async function testProviderSpeed(id, btn) {
   const p = providers[id];
   const statusEl = btn.parentElement.querySelector('.provider-status');
+  const dot = btn.closest('.provider-card') ? btn.closest('.provider-card').querySelector('.status-dot') : null;
   if (!p || !p.key) { statusEl.textContent = 'Key 未保存，无法测速'; statusEl.style.color = 'var(--danger)'; return; }
   statusEl.textContent = '测速中…';
   statusEl.style.color = 'var(--sub)';
@@ -1044,9 +1077,11 @@ async function testProviderSpeed(id, btn) {
     const ms = Math.round(performance.now() - t0);
     statusEl.textContent = ms + 'ms · 可用';
     statusEl.style.color = 'var(--ok)';
+    if (dot) { dot.className = 'status-dot ok'; dot.title = ms + 'ms · 可用'; }
   } catch (e) {
     statusEl.textContent = '不通' + (e.name === 'AbortError' ? '（超时）' : e.message ? '（' + e.message + '）' : '');
     statusEl.style.color = 'var(--danger)';
+    if (dot) { dot.className = 'status-dot bad'; dot.title = '不通'; }
   } finally {
     clearTimeout(timer);
     btn.disabled = false;
