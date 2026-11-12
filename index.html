@@ -595,6 +595,7 @@
 const SUPABASE_URL = 'https://xmwgwldhzhdsgklmvgpg.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_ZTfPpyiMKJLe9POArBS4OQ_Akd8SPQu';
 const TURNSTILE_SITEKEY = '0x4AAAAAAF9kdFWwrcf2BMUH'; // 在 Cloudflare 建 Turnstile 站点后把 sitekey 填在这里，空着就不显示验证码
+const R2_WORKER_URL = 'https://huilefang-img.liuhuanle0312.workers.dev'; // 图片存 R2 的上传口（v31 起新图走这里，旧图仍在 Supabase 桶里）
 
 const $ = id => document.getElementById(id);
 const PAGE_SIZE = 30;
@@ -1059,6 +1060,8 @@ async function logSecurity(action, detail = '') {
 
 async function getViewUrl(record) {
   if (record.image_url) return record.image_url;
+  const r2key = r2KeyOf(record);
+  if (r2key) return r2ImageUrl(r2key, await r2Token());
   if (record.image_path) {
     try {
       const { data } = await sb.storage.from('images').createSignedUrl(record.image_path, SIGNED_URL_TTL);
@@ -1066,6 +1069,47 @@ async function getViewUrl(record) {
     } catch (e) { return ''; }
   }
   return '';
+}
+
+// R2 存图（v31）：新图不再存 Supabase 桶，改走 Worker 存进 R2；image_path 存 'r2:' + key
+async function r2Token() {
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    return session ? session.access_token : '';
+  } catch (e) { return ''; }
+}
+function r2KeyOf(record) {
+  return record.image_path && record.image_path.startsWith('r2:') ? record.image_path.slice(3) : null;
+}
+function r2ImageUrl(key, token) {
+  return R2_WORKER_URL + '/image?key=' + encodeURIComponent(key) + (token ? '&token=' + token : '');
+}
+async function r2Upload(blob, ext, type) {
+  const token = await r2Token();
+  if (!token) throw new Error('登录已过期');
+  const res = await fetch(R2_WORKER_URL + '/upload?ext=' + ext, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': type },
+    body: blob,
+  });
+  if (!res.ok) {
+    let msg = '图片上传失败';
+    try { const j = await res.json(); if (j && j.error) msg = j.error; } catch (e) {}
+    throw new Error(msg);
+  }
+  const j = await res.json();
+  if (!j || !j.key) throw new Error('图片上传失败');
+  return j.key;
+}
+async function r2Delete(key) {
+  const token = await r2Token();
+  if (!token) return;
+  try {
+    await fetch(R2_WORKER_URL + '/image?key=' + encodeURIComponent(key), {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + token },
+    });
+  } catch (e) {}
 }
 
 
@@ -1971,11 +2015,9 @@ async function saveRecord(src, meta) {
     meta.file_size_bytes = blob.size;
     const type = blob.type && blob.type.startsWith('image/') ? blob.type : 'image/png';
     const ext = ({ 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/svg+xml': 'svg' })[type] || 'png';
-    const path = `${currentUser.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    
-    const { error } = await sb.storage.from('images').upload(path, blob, { contentType: type });
-    if (error) throw error;
-    image_path = path;
+
+    const key = await r2Upload(blob, ext, type);
+    image_path = 'r2:' + key;
   } catch (e) {
     if (src.startsWith('data:')) throw new Error('图片上传失败');
     image_url = src;
@@ -2004,11 +2046,17 @@ async function loadHistory() {
   
   if (error) return setStatus('读取失败', true);
 
-  const paths = data.filter(r => r.image_path).map(r => r.image_path);
+  const paths = data.filter(r => r.image_path && !r.image_path.startsWith('r2:')).map(r => r.image_path);
   const signed = {};
   if (paths.length) {
     const { data: s } = await sb.storage.from('images').createSignedUrls(paths, SIGNED_URL_TTL);
     (s || []).forEach(x => { if (x.signedUrl) signed[x.path] = x.signedUrl; });
+  }
+  // R2 的图：直接用 Worker 直链（凭证放 ?token=，因为 <img> 发不了 Authorization 请求头）
+  const r2rows = data.filter(r => r.image_path && r.image_path.startsWith('r2:'));
+  if (r2rows.length) {
+    const token = await r2Token();
+    r2rows.forEach(r => { signed[r.image_path] = r2ImageUrl(r.image_path.slice(3), token); });
   }
   
   data.forEach(r => addCard(r, signed[r.image_path] || r.image_url, false));
@@ -2062,11 +2110,17 @@ function addCard(record, src, atTop) {
       // 链接过期是最常见的原因（之前签名只有 1 小时有效）：重新签发一次再试
       if (record.image_path && !imgEl.dataset.refreshed) {
         imgEl.dataset.refreshed = '1';
-        const { data } = await sb.storage.from('images').createSignedUrl(record.image_path, SIGNED_URL_TTL);
-        if (data && data.signedUrl) {
-          currentSrc = data.signedUrl;
-          if (dl) dl.href = currentSrc;
-          imgEl.src = currentSrc;
+        let fresh = '';
+        const r2key = r2KeyOf(record);
+        if (r2key) fresh = r2ImageUrl(r2key, await r2Token());
+        else {
+          const { data } = await sb.storage.from('images').createSignedUrl(record.image_path, SIGNED_URL_TTL);
+          if (data && data.signedUrl) fresh = data.signedUrl;
+        }
+        if (fresh) {
+          currentSrc = fresh;
+          if (dl) dl.href = fresh;
+          imgEl.src = fresh;
           return;
         }
       }
@@ -2188,7 +2242,11 @@ function addCard(record, src, atTop) {
     del.onclick = async () => {
       if (!confirm('确定删除吗？')) return;
       del.disabled = true;
-      if (record.image_path) await sb.storage.from('images').remove([record.image_path]);
+      if (record.image_path) {
+        const r2key = r2KeyOf(record);
+        if (r2key) await r2Delete(r2key);
+        else await sb.storage.from('images').remove([record.image_path]);
+      }
       const { error } = await sb.from('generations').delete().eq('id', record.id);
       if (error) { del.disabled = false; return setStatus('删除失败', true); }
       card.classList.add('deleting');
