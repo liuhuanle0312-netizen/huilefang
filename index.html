@@ -102,6 +102,13 @@
   body.scrolled .brand-bar .brand-name { font-size: 18px; }
   body.scrolled .brand-bar { padding-top: calc(10px + env(safe-area-inset-top, 0px)); padding-bottom: 2px; background: linear-gradient(var(--panel), transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 4px 16px rgba(0,0,0,.12); }
   html.dark body.scrolled .brand-bar { box-shadow: 0 4px 16px rgba(0,0,0,.45); }
+  /* 维护横幅：固定在屏幕最顶上，文字左右循环滚动（两段相同文字无缝衔接） */
+  #maintBar { position: fixed; top: 0; left: 0; right: 0; z-index: 20; height: 34px; line-height: 34px; padding: 0; overflow: hidden; }
+  #maintBar .maint-track { display: inline-flex; white-space: nowrap; animation: maintScroll 9s linear infinite; }
+  #maintBar .maint-track span { padding: 0 24px; }
+  @keyframes maintScroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+  body.maint-on { padding-top: 34px; }
+  body.maint-on .brand-bar { top: 34px; }
   #themeIcon { display: inline-block; transition: transform .45s ease; }
   /* 切换深色/浅色时整个页面淡入过渡 */
   html.theme-fading *, html.theme-fading *::before, html.theme-fading *::after { transition: background-color .3s ease, color .3s ease, border-color .3s ease !important; }
@@ -315,7 +322,7 @@
     <div class="brand-bar"><span class="brand-name" id="brandName">绘乐坊</span><div class="brand-right"><button id="themeToggle" class="secondary" title="深色模式" style="padding: 6px 10px;"><span id="themeIcon">🌙</span></button><button id="avatarBtn" class="avatar-btn" title="个人资料"></button></div></div>
 
     <div id="offlineBar" class="hidden" style="background: rgba(220,38,38,.1); color: var(--danger); font-size: 13px; text-align: center; padding: 8px 12px;">网络已断开，请检查网络后再生成</div>
-    <div id="maintBar" class="hidden" style="background: rgba(234,88,12,.1); color: #ea580c; font-size: 13px; text-align: center; padding: 8px 12px;">网站维护中，暂停生成，稍后再试</div>
+    <div id="maintBar" class="hidden" style="background: rgba(234,88,12,.1); color: #ea580c; font-size: 13px;"><div class="maint-track"><span>网站维护中，暂停生成，稍后再试</span><span>网站维护中，暂停生成，稍后再试</span></div></div>
     <!-- 顶部导航栏 -->
     <div class="topbar">
       <div class="topbar-left">
@@ -707,7 +714,7 @@ if (SUPABASE_URL.includes('你的项目') || !window.supabase) {
       if (recovering) return;
       const user = session?.user || null;
       if (user && user.id !== currentUser?.id) enterApp(user);
-      else if (!user) { currentUser = null; show('viewAuth'); }
+      else if (!user) { currentUser = null; show('viewAuth'); updateMaintBar(); }
     }, 0);
   });
 }
@@ -892,6 +899,8 @@ function updateMaintBar() {
   if (bar) bar.classList.toggle('hidden', !maintenanceOn);
   const authBar = $('maintAuthBar');
   if (authBar) authBar.classList.toggle('hidden', !maintenanceOn);
+  // 横幅固定在顶上时，页面整体下移 34px，品牌栏贴在横幅下面跟着吸顶
+  document.body.classList.toggle('maint-on', maintenanceOn && !$('viewApp').classList.contains('hidden'));
 }
 // 打开页面就查一次，登录页也能看到维护提示
 fetchMaintenance().then(updateMaintBar);
