@@ -56,6 +56,10 @@
   input, select, textarea { width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--input); color: var(--text); font-size: 14px; font-family: inherit; transition: border-color .15s, box-shadow .15s; }
   textarea { min-height: 100px; resize: vertical; }
   input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15); }
+  /* 登录框输入框前面的小图标 */
+  .auth-field { position: relative; }
+  .auth-field .auth-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 14px; pointer-events: none; }
+  .auth-field input { padding-left: 32px; }
   /* iOS：输入框字号小于 16px 时点进去会自动放大页面，iOS 上强制 16px */
   @supports (-webkit-touch-callout: none) {
     input, select, textarea { font-size: 16px; }
@@ -93,8 +97,11 @@
   .brand-right { display: flex; align-items: center; gap: 12px; }
   .brand-bar .brand-name { font-size: 28px; transition: font-size .25s ease; }
   body.scrolled .brand-bar .brand-name { font-size: 18px; }
-  body.scrolled .brand-bar { padding-top: calc(10px + env(safe-area-inset-top, 0px)); padding-bottom: 2px; background: linear-gradient(var(--panel), transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+  body.scrolled .brand-bar { padding-top: calc(10px + env(safe-area-inset-top, 0px)); padding-bottom: 2px; background: linear-gradient(var(--panel), transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 4px 16px rgba(0,0,0,.12); }
+  html.dark body.scrolled .brand-bar { box-shadow: 0 4px 16px rgba(0,0,0,.45); }
   #themeIcon { display: inline-block; transition: transform .45s ease; }
+  /* 切换深色/浅色时整个页面淡入过渡 */
+  html.theme-fading *, html.theme-fading *::before, html.theme-fading *::after { transition: background-color .3s ease, color .3s ease, border-color .3s ease !important; }
   .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #9ca3af; flex-shrink: 0; }
   .status-dot.ok { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
   .status-dot.bad { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
@@ -106,7 +113,7 @@
   .topbar button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
   .topbar button.active::after { content: ''; position: absolute; left: 10px; right: 10px; bottom: -13px; height: 3px; border-radius: 3px 3px 0 0; background: var(--accent); }
 
-  .avatar-btn { width: 32px; height: 32px; padding: 0; border-radius: 50%; border: 2px solid var(--line); background-size: cover; background-position: center; cursor: pointer; flex-shrink: 0; }
+  .avatar-btn { width: 32px; height: 32px; padding: 0; border-radius: 50%; border: 2px solid var(--line); background-size: cover; background-position: center; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; color: #fff; background-color: var(--accent); }
   .avatar-btn:hover { border-color: var(--accent); }
 
   .app-body { display: grid; grid-template-columns: 340px 1fr; flex: 1; }
@@ -258,19 +265,20 @@
 <div id="viewAuth" class="hidden">
   <div class="auth-box">
     <h1>绘乐坊</h1>
+    <p style="text-align: center; font-size: 13px; color: var(--sub); margin: 0 0 16px;">绘你所想，乐在其中</p>
     <div class="tabs">
       <button id="tabLogin" class="active">登录</button>
       <button id="tabSignup">注册</button>
     </div>
     <label>邮箱</label>
-    <input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com">
+    <div class="auth-field" id="emailField"><span class="auth-icon">✉️</span><input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com"></div>
     <label>密码</label>
-    <input id="authPassword" type="password" autocomplete="current-password" placeholder="至少 6 位">
+    <div class="auth-field" id="passwordField"><span class="auth-icon">🔒</span><input id="authPassword" type="password" autocomplete="current-password" placeholder="至少 6 位"></div>
     <div id="confirmWrap" class="hidden">
       <label>确认密码</label>
-      <input id="authPassword2" type="password" autocomplete="new-password">
+      <div class="auth-field"><span class="auth-icon">🔒</span><input id="authPassword2" type="password" autocomplete="new-password"></div>
     </div>
-    <div id="turnstileBox" class="hidden" style="margin-top: 12px;"><div id="turnstileWidget"></div></div>
+    <div id="turnstileBox" class="hidden" style="margin-top: 12px;"><div id="turnstileLoading" style="font-size: 12px; color: var(--sub);">验证加载中…</div><div id="turnstileWidget"></div></div>
     <button class="primary" id="authSubmit">登录</button>
     <div class="center"><button class="link" id="forgotBtn">忘记密码？</button></div>
     <div id="mfaWrap" class="hidden">
@@ -380,6 +388,7 @@
           <div class="gen-section">
             <div class="gen-label">提示词</div>
             <textarea id="genPrompt" placeholder="描述你想要的画面"></textarea>
+            <div id="promptCount" style="text-align: right; font-size: 11px; color: var(--sub); margin-top: 2px;">0 字</div>
             <div class="hint hidden" id="promptLenWarn" style="color: var(--danger);"></div>
           </div>
 
@@ -585,6 +594,8 @@ let themeRot = 0;
 $('themeToggle').onclick = () => {
   const dark = !document.documentElement.classList.contains('dark');
   localStorage.setItem('imggen-theme', dark ? 'dark' : 'light');
+  document.documentElement.classList.add('theme-fading');
+  setTimeout(() => document.documentElement.classList.remove('theme-fading'), 350);
   applyTheme();
   themeRot += 360;
   $('themeIcon').style.transform = `rotate(${themeRot}deg)`;
@@ -711,6 +722,8 @@ function renderTurnstile() {
   if (!TURNSTILE_SITEKEY || !window.turnstile || turnstileRendered) return;
   turnstileRendered = true;
   $('turnstileBox').classList.remove('hidden');
+  const ld = $('turnstileLoading');
+  if (ld) ld.style.display = 'none';
   window.turnstile.render('#turnstileWidget', {
     sitekey: TURNSTILE_SITEKEY,
     callback: (t) => { turnstileToken = t; },
@@ -720,6 +733,14 @@ function renderTurnstile() {
 }
 window.addEventListener('load', renderTurnstile);
 renderTurnstile();
+// 验证框没加载出来时先显示“验证加载中…”，15 秒还没好就提示刷新
+if (TURNSTILE_SITEKEY) {
+  $('turnstileBox').classList.remove('hidden');
+  setTimeout(() => {
+    const ld = $('turnstileLoading');
+    if (ld && ld.style.display !== 'none') ld.textContent = '验证加载较慢，请检查网络或刷新页面重试';
+  }, 15000);
+}
 
 // 登录失败计数：连续输错密码 3 次后，强制刷新人机验证并提醒
 // （人机验证不能等 3 次失败后再出现——实测 Supabase 在开了 CAPTCHA 后，
@@ -780,14 +801,14 @@ $('authPassword').addEventListener('keydown', e => { if (e.key === 'Enter' && !s
 
 // 登录二次验证：密码过了、动态码还没输时，藏起登录表单、只显示输码框
 function showMfaStep() {
-  ['authEmail', 'authPassword', 'authSubmit', 'forgotBtn', 'confirmWrap', 'tabLogin', 'tabSignup', 'turnstileBox'].forEach(id => $(id).classList.add('hidden'));
+  ['emailField', 'passwordField', 'authSubmit', 'forgotBtn', 'confirmWrap', 'tabLogin', 'tabSignup', 'turnstileBox'].forEach(id => $(id).classList.add('hidden'));
   $('mfaWrap').classList.remove('hidden');
   setMsg($('authMsg'), '这个账号开了二次验证，请输入验证器 App 里的 6 位动态码');
   $('mfaCode').value = '';
   $('mfaCode').focus();
 }
 function hideMfaStep() {
-  ['authEmail', 'authPassword', 'authSubmit', 'forgotBtn', 'tabLogin', 'tabSignup'].forEach(id => $(id).classList.remove('hidden'));
+  ['emailField', 'passwordField', 'authSubmit', 'forgotBtn', 'tabLogin', 'tabSignup'].forEach(id => $(id).classList.remove('hidden'));
   if (turnstileRendered) $('turnstileBox').classList.remove('hidden');
   $('mfaWrap').classList.add('hidden');
   setMsg($('authMsg'), '');
@@ -1027,6 +1048,38 @@ function markSelectedProvider() {
   document.querySelectorAll('#providerList .provider-card').forEach(c => c.classList.toggle('selected', c.dataset.pid === cur));
 }
 
+// 供应商卡片显示模型数：先读缓存，没有就后台调一次 /models 补上
+const MODEL_COUNT_KEY = 'imggen-model-counts';
+function getModelCounts() {
+  if (!currentUser) return {};
+  try { return JSON.parse(localStorage.getItem(MODEL_COUNT_KEY + '-' + currentUser.id) || '{}'); } catch (e) { return {}; }
+}
+function setModelCount(pid, n) {
+  if (!currentUser) return;
+  const c = getModelCounts();
+  c[pid] = n;
+  localStorage.setItem(MODEL_COUNT_KEY + '-' + currentUser.id, JSON.stringify(c));
+}
+function loadModelCounts() {
+  const cached = getModelCounts();
+  document.querySelectorAll('#providerList .model-count').forEach(el => {
+    const pid = el.dataset.pid;
+    if (cached[pid] != null) el.textContent = cached[pid] + ' 个模型';
+    else if (!providers[pid] || !providers[pid].key) el.textContent = 'Key 未保存';
+    else el.textContent = '…';
+  });
+  Object.keys(providers).forEach(pid => {
+    const p = providers[pid];
+    if (!p.key || cached[pid] != null) return;
+    fetchModels(p).then(models => {
+      setModelCount(pid, models.length);
+      document.querySelectorAll(`#providerList .model-count[data-pid="${pid}"]`).forEach(el => el.textContent = models.length + ' 个模型');
+    }).catch(() => {
+      document.querySelectorAll(`#providerList .model-count[data-pid="${pid}"]`).forEach(el => el.textContent = '模型数未知');
+    });
+  });
+}
+
 function renderProviders() {
   const list = $('providerList');
   list.innerHTML = '';
@@ -1053,6 +1106,7 @@ function renderProviders() {
       </div>
       <div class="provider-info">
         <div>${escapeHtml(p.url)}</div>
+        <div class="model-count" data-pid="${id}" style="font-size: 12px; color: var(--sub);"></div>
       </div>
       <div class="provider-tools">
         <button onclick="testProviderSpeed('${id}', this)">测速</button>
@@ -1063,6 +1117,7 @@ function renderProviders() {
     list.append(card);
   });
   markSelectedProvider();
+  loadModelCounts();
 }
 
 function editProvider(id) {
@@ -1161,6 +1216,7 @@ function updateModelList() {
     pendingLastModel = null;
     modelSel.disabled = false;
     renderMultiModelList(models);
+    setModelCount(supplierId, models.length);
   }).catch(e => {
     modelSel.innerHTML = '<option value="">加载失败</option>';
     modelSel.disabled = false;
@@ -1230,9 +1286,15 @@ async function testProviderSpeed(id, btn) {
     statusEl.style.color = 'var(--ok)';
     if (dot) { dot.className = 'status-dot ok'; dot.title = ms + 'ms · 可用'; }
   } catch (e) {
-    statusEl.textContent = '不通' + (e.name === 'AbortError' ? '（超时）' : e.message ? '（' + e.message + '）' : '');
+    // 401/403 是 Key 不对，超时或连不上是网络问题，分开说
+    if (/HTTP 40[13]/.test(e.message || '')) {
+      statusEl.textContent = 'Key 不对';
+      if (dot) { dot.className = 'status-dot bad'; dot.title = 'Key 不对'; }
+    } else {
+      statusEl.textContent = '不通' + (e.name === 'AbortError' ? '（超时）' : e.message ? '（' + e.message + '）' : '');
+      if (dot) { dot.className = 'status-dot bad'; dot.title = '不通'; }
+    }
     statusEl.style.color = 'var(--danger)';
-    if (dot) { dot.className = 'status-dot bad'; dot.title = '不通'; }
   } finally {
     clearTimeout(timer);
     btn.disabled = false;
@@ -1520,6 +1582,7 @@ function updateAvatarDisplay(avatar) {
     display.textContent = (currentUser.email || 'U').charAt(0).toUpperCase();
   }
   $('avatarBtn').style.backgroundImage = avatar ? `url(${avatar})` : '';
+  $('avatarBtn').textContent = avatar ? '' : (currentUser.email || 'U').charAt(0).toUpperCase();
 }
 
 $('avatarBtn').onclick = () => {
@@ -2173,6 +2236,7 @@ function updateGenBtnState() {
 // 提示词超过 1000 字提醒：部分模型可能会截断，只取前面部分
 function checkPromptLength() {
   const len = $('genPrompt').value.length;
+  $('promptCount').textContent = len + ' 字';
   const warn = $('promptLenWarn');
   warn.classList.toggle('hidden', len <= 1000);
   if (len > 1000) warn.textContent = `提示词已 ${len} 字，超过 1000 字部分模型可能会截断，只取前面部分。`;
