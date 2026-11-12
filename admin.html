@@ -240,7 +240,9 @@
       <div class="stat-box tint-orange"><div class="stat-num" id="statToday">—</div><div class="stat-label">今日生图</div></div>
       <div class="stat-box tint-purple"><div class="stat-num" id="statTotal">—</div><div class="stat-label">累计生图</div></div>
       <div class="stat-box tint-teal"><div class="stat-num" id="statNewUsers">—</div><div class="stat-label">今日新增用户</div></div>
+      <div class="stat-box"><div class="stat-num" id="statR2Size">—</div><div class="stat-label" id="statR2Label">R2 存储用量</div></div>
     </div>
+    <div id="storageOld" class="hint" style="margin: -4px 0 12px;"></div>
     <button id="adminRefreshBtn" class="secondary" style="margin: 4px 0 12px;">刷新</button>
     <h2>网站维护</h2>
     <div style="font-size: 13px; margin-bottom: 4px;">当前状态：<strong id="maintState">…</strong> <button id="maintToggleBtn" class="secondary" style="margin-left: 8px;">开启维护</button></div>
@@ -251,14 +253,24 @@
     <div id="adminSecurityList" style="font-size: 13px;"></div>
     <h2>最近操作</h2>
     <div id="adminActivityList" style="font-size: 13px;"></div>
+    <h2>意见反馈</h2>
+    <div id="adminFeedbackList" style="font-size: 13px;"></div>
   </div>
 </div>
 
 <script>
 const SUPABASE_URL = 'https://xmwgwldhzhdsgklmvgpg.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_ZTfPpyiMKJLe9POArBS4OQ_Akd8SPQu';
+const R2_WORKER_URL = 'https://huilefang-img.liuhuanle0312.workers.dev'; // 新图存在 R2，后台看图也要走这里
 const SIGNED_URL_TTL = 604800;
 const $ = id => document.getElementById(id);
+function formatSize(n) {
+  if (!n || n <= 0) return '0B';
+  if (n < 1024) return n + 'B';
+  if (n < 1024 * 1024) return (n / 1024 >= 100 ? Math.round(n / 1024) : (n / 1024).toFixed(1).replace(/\.0$/, '')) + 'KB';
+  if (n < 1024 * 1024 * 1024) return (n / 1024 / 1024).toFixed(1).replace(/\.0$/, '') + 'MB';
+  return (n / 1024 / 1024 / 1024).toFixed(2).replace(/\.00$/, '') + 'GB';
+}
 function escapeHtml(text) {
   const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
   return String(text ?? '').replace(/[&<>"']/g, m => map[m]);
@@ -280,6 +292,13 @@ async function logSecurity(action, detail = '') {
 
 async function getViewUrl(record) {
   if (record.image_url) return record.image_url;
+  if (record.image_path && record.image_path.startsWith('r2:')) {
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      const token = session ? session.access_token : '';
+      return R2_WORKER_URL + '/image?key=' + encodeURIComponent(record.image_path.slice(3)) + (token ? '&token=' + token : '');
+    } catch (e) { return ''; }
+  }
   if (record.image_path) {
     try {
       const { data } = await sb.storage.from('images').createSignedUrl(record.image_path, SIGNED_URL_TTL);
@@ -300,6 +319,17 @@ async function loadAdmin() {
   $('statToday').textContent = todayGen ?? '—';
   const { count: newUsers } = await sb.from('profiles').select('id', { count: 'exact', head: true }).gte('created_at', today.toISOString());
   $('statNewUsers').textContent = newUsers ?? '—';
+  // 存储用量：R2 新图（r2: 开头）和 Supabase 旧图分开算
+  const { data: allGens } = await sb.from('generations').select('image_path, file_size_bytes').limit(1000);
+  let r2Count = 0, r2Bytes = 0, oldCount = 0, oldBytes = 0, oldUnknown = 0;
+  (allGens || []).forEach(g => {
+    const isR2 = g.image_path && g.image_path.startsWith('r2:');
+    if (isR2) { r2Count++; r2Bytes += g.file_size_bytes || 0; }
+    else { oldCount++; if (g.file_size_bytes) oldBytes += g.file_size_bytes; else oldUnknown++; }
+  });
+  $('statR2Size').textContent = formatSize(r2Bytes);
+  $('statR2Label').textContent = `R2 存储用量 · ${r2Count} 张`;
+  $('storageOld').textContent = `Supabase 旧图：${oldCount} 张，共 ${formatSize(oldBytes)}${oldUnknown ? `（${oldUnknown} 张无大小记录）` : ''}；R2 免费额度 10GB`;
   const { data: maint } = await sb.from('site_settings').select('value').eq('key', 'maintenance').maybeSingle();
   const maintOn = !!(maint && maint.value === 'on');
   $('maintState').textContent = maintOn ? '维护中' : '正常';
@@ -394,6 +424,33 @@ async function loadAdmin() {
     actBox.append(d);
   });
   if (!acts || acts.length === 0) actBox.innerHTML = '<div style="color: var(--sub);">暂无操作记录</div>';
+
+  // 意见反馈（最新 50 条）
+  const fbBox = $('adminFeedbackList');
+  try {
+    const { data: fbs, error: fbErr } = await sb.from('feedback').select('id, email, content, created_at').order('created_at', { ascending: false }).limit(50);
+    if (fbErr) throw fbErr;
+    fbBox.innerHTML = '';
+    (fbs || []).forEach(f => {
+      const d = document.createElement('div');
+      d.className = 'admin-act';
+      d.innerHTML = `<div>${new Date(f.created_at).toLocaleString()} · ${escapeHtml(f.email || '')}</div><div style="margin-top: 2px;">${escapeHtml(f.content || '')}</div>`;
+      const del = document.createElement('button');
+      del.className = 'link';
+      del.textContent = '删除';
+      del.onclick = async () => {
+        if (!confirm('确定删除这条反馈吗？')) return;
+        const { error } = await sb.from('feedback').delete().eq('id', f.id);
+        if (error) { setMsg($('gateMsg'), '删除失败', 'error'); return; }
+        d.remove();
+      };
+      d.append(del);
+      fbBox.append(d);
+    });
+    if (!fbs || fbs.length === 0) fbBox.innerHTML = '<div style="color: var(--sub);">暂无反馈</div>';
+  } catch (e) {
+    fbBox.innerHTML = '<div style="color: var(--sub);">反馈表还没建好（等 SQL 跑完就有了）</div>';
+  }
 }
 
 $('adminRefreshBtn').onclick = () => loadAdmin();

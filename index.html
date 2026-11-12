@@ -361,7 +361,7 @@
             <p style="margin-top: 16px;"><strong>常见问题</strong></p>
             <details><summary>API Key 存在哪？</summary><p>只存在你当前用的浏览器里。换浏览器、换手机或者清了缓存，都要重新填一次。</p></details>
             <details><summary>换设备能看到以前生成的图吗？</summary><p>能。历史记录和图片存在云端账号里，登录同一个账号就能看到。但 API Key 不跟账号走，新设备要重新填 Key。</p></details>
-            <details><summary>图片保存多久？</summary><p>图片存在云端，不会自动删除。历史图片的打开链接 7 天有效，过期后打开时会自动续一次；如果显示“图片已失效”，就是链接过期且续签失败了。</p></details>
+            <details><summary>图片保存多久？</summary><p>图片存在云端，不会自动删除。新图存在 R2，打开链接每次重新生成，不会过期；以前存在 Supabase 的旧图链接 7 天有效，过期后打开时会自动续一次；如果显示“图片已失效”，就是链接过期且续签失败了。</p></details>
             <details><summary>生成失败怎么办？</summary><p>页面会用中文告诉你原因，比如 Key 不对、没开通这个模型、请求太频繁，按提示处理就行。</p></details>
             <details><summary>用这个网站要钱吗？</summary><p>网站本身不收费。生图消耗的是你自己中转站 Key 的额度，用多少由你的中转站计费。</p></details>
             <details><summary>为什么有的图打不开？</summary><p>有些中转站的图片链接不允许跨域下载，网站只能存个链接，链接过期后就打不开了。</p></details>
@@ -369,6 +369,11 @@
             <p>暂无更新记录。</p>
             <p style="margin-top: 16px;"><strong>联系方式</strong></p>
             <p>有问题或建议，联系站长：QQ：168264129 <button class="link" id="copyQqBtn" onclick="copyQQ()">复制</button></p>
+            <p style="margin-top: 16px;"><strong>意见反馈</strong></p>
+            <p>有想法、遇到问题，都可以在这里告诉站长。</p>
+            <textarea id="feedbackText" placeholder="写下你的建议或遇到的问题…" style="min-height: 80px;"></textarea>
+            <button class="primary" id="feedbackBtn" style="margin-top: 8px;">提交反馈</button>
+            <div class="msg" id="feedbackMsg"></div>
           </div>
         </div>
 
@@ -2530,6 +2535,24 @@ function fallbackCopyQQ(text, done) {
   try { document.execCommand('copy'); done(); } catch (e) {}
   ta.remove();
 }
+
+// 意见反馈：提交到 feedback 表，站长在管理后台看
+$('feedbackBtn').onclick = async () => {
+  const text = $('feedbackText').value.trim();
+  if (!text) return setMsg($('feedbackMsg'), '先写点内容再提交', 'error');
+  if (!currentUser) return setMsg($('feedbackMsg'), '请先登录', 'error');
+  $('feedbackBtn').disabled = true;
+  try {
+    const { error } = await sb.from('feedback').insert({ user_id: currentUser.id, email: currentUser.email, content: text });
+    if (error) throw error;
+    $('feedbackText').value = '';
+    setMsg($('feedbackMsg'), '已提交，谢谢你的建议', 'ok');
+  } catch (e) {
+    setMsg($('feedbackMsg'), '提交失败：' + friendlyError(e), 'error');
+  } finally {
+    $('feedbackBtn').disabled = false;
+  }
+};
 </script>
 </body>
 </html>
