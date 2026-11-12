@@ -2,7 +2,10 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#f5f6f8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>绘乐坊</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
@@ -43,7 +46,7 @@
     --panel-glass: rgba(31,41,55,.8);
   }
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: "Yuanti SC", -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif; background: var(--bg); color: var(--text); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.035 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  body { margin: 0; font-family: "Yuanti SC", -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif; background: var(--bg); color: var(--text); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.035 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E"); -webkit-tap-highlight-color: transparent; padding-bottom: env(safe-area-inset-bottom, 0px); }
   html.dark body { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E"); }
   .brand-name, h1, .section-title, .modal-head { font-family: "ZCOOL KuaiLe", "Yuanti SC", "PingFang SC", "Microsoft YaHei", sans-serif; }
   .hidden { display: none !important; }
@@ -53,11 +56,15 @@
   input, select, textarea { width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--input); color: var(--text); font-size: 14px; font-family: inherit; transition: border-color .15s, box-shadow .15s; }
   textarea { min-height: 100px; resize: vertical; }
   input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15); }
+  /* iOS：输入框字号小于 16px 时点进去会自动放大页面，iOS 上强制 16px */
+  @supports (-webkit-touch-callout: none) {
+    input, select, textarea { font-size: 16px; }
+  }
   .row { display: flex; gap: 8px; }
   .row > * { flex: 1; }
   .check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--sub); margin-top: 8px; }
   .check input { width: auto; accent-color: var(--accent); }
-  button { padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; background: var(--panel); color: var(--text); font-size: 13px; font-weight: 500; transition: background-color .15s, border-color .15s, transform .1s; }
+  button { padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; background: var(--panel); color: var(--text); font-size: 13px; font-weight: 500; transition: background-color .15s, border-color .15s, transform .1s; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
   button:hover { background: var(--soft); }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; width: 100%; margin-top: 12px; padding: 12px; font-size: 15px; font-weight: 600; border-radius: 8px; }
   button.primary:hover { background: var(--accent-hover); }
@@ -78,9 +85,9 @@
   .tabs button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
   .center { text-align: center; margin-top: 14px; }
 
-  .app-wrap { display: flex; flex-direction: column; min-height: 100vh; }
+  .app-wrap { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
   
-  .brand-bar { background: var(--panel); padding: 16px 20px 4px; font-size: 20px; font-weight: 700; color: var(--text); display: flex; justify-content: space-between; align-items: center; transition: padding .25s ease; }
+  .brand-bar { background: var(--panel); padding: calc(16px + env(safe-area-inset-top, 0px)) calc(20px + env(safe-area-inset-right, 0px)) 4px calc(20px + env(safe-area-inset-left, 0px)); font-size: 20px; font-weight: 700; color: var(--text); display: flex; justify-content: space-between; align-items: center; transition: padding .25s ease; }
   .brand-right { display: flex; align-items: center; gap: 12px; }
   .brand-bar .brand-name { font-size: 28px; transition: font-size .25s ease; }
   body.scrolled .brand-bar .brand-name { font-size: 18px; }
@@ -90,7 +97,7 @@
   .status-dot.ok { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
   .status-dot.bad { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
 
-  .topbar { background: var(--panel-glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 5; }
+  .topbar { background: var(--panel-glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; gap: 16px; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
   .topbar-left { display: flex; align-items: center; gap: 8px; flex: 1; }
   .topbar-right { display: flex; align-items: center; gap: 12px; }
   .topbar button { padding: 6px 12px; font-size: 13px; white-space: nowrap; position: relative; }
@@ -144,7 +151,7 @@
   #tierSection, #ratioSection { margin-bottom: 12px; }
   .skeleton-img { height: 200px; background: linear-gradient(90deg, var(--soft) 25%, var(--soft-hover) 50%, var(--soft) 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite linear; }
   @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-  #genPrompt { max-height: 200px; overflow-y: auto; }
+  #genPrompt { max-height: 200px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
   .select-box-trigger.disabled { opacity: .45; cursor: not-allowed; }
   .ratio-card.active .ratio-shape { border-color: var(--accent); }
   .ratio-name { font-size: 13px; font-weight: 600; }
@@ -175,6 +182,8 @@
   .card-time { position: absolute; left: 0; right: 0; bottom: 0; padding: 16px 8px 6px; background: linear-gradient(transparent, rgba(0,0,0,.55)); color: #fff; font-size: 11px; pointer-events: none; }
   .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); }
   .card img { max-width: 100%; max-height: 160px; width: auto; height: auto; display: block; margin: 0 auto; cursor: zoom-in; background: var(--soft); }
+  /* iOS：长按图片不弹出系统菜单（参考图本来就用长按看大图） */
+  .ref-thumb, .card img { -webkit-touch-callout: none; }
   .card .broken { padding: 40px 10px; text-align: center; color: var(--sub); font-size: 13px; background: var(--soft); }
   .card .meta { padding: 8px; font-size: 11px; color: var(--sub); }
   .card .prompt { color: var(--text); margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -189,6 +198,8 @@
 
   #viewer { position: fixed; inset: 0; background: var(--viewer-bg); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: none; align-items: center; justify-content: center; z-index: 10; cursor: zoom-out; }
   #viewer img { max-width: 95vw; max-height: 95vh; box-shadow: 0 4px 24px rgba(0,0,0,.15); }
+  @keyframes viewerZoomIn { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
+  #viewer.zooming img { animation: viewerZoomIn .25s ease-out; }
 
   .modal { position: fixed; inset: 0; background: rgba(0,0,0,.3); display: none; align-items: center; justify-content: center; z-index: 20; }
   .modal.show { display: flex; }
@@ -339,9 +350,16 @@
             </select>
           </div>
 
+          <div class="gen-section" style="margin-top: 8px;">
+            <label class="check" style="margin-top: 0;"><input type="checkbox" id="multiModelCheck"> 多模型对比（一次提交，每个模型各出 1 张）</label>
+            <div id="multiModelList" class="hidden" style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px;"></div>
+            <div class="hint hidden" id="multiModelHint">多模型对比时每个模型各出 1 张，数量设置不生效。</div>
+          </div>
+
           <div class="gen-section">
             <div class="gen-label">提示词</div>
             <textarea id="genPrompt" placeholder="描述你想要的画面"></textarea>
+            <div class="hint hidden" id="promptLenWarn" style="color: var(--danger);"></div>
           </div>
 
           <div class="gen-section">
@@ -404,7 +422,7 @@
             <div class="row">
               <div style="flex: 1;">
                 <label>数量</label>
-                <input id="genCount" type="number" min="1" max="4" value="1">
+                <input id="genCount" type="number" min="1" max="8" value="1">
               </div>
               <div style="flex: 1;">
                 <label>&nbsp;</label>
@@ -414,6 +432,7 @@
           </div>
 
           <div id="genProgressWrap" class="hidden" style="margin-bottom: 12px; padding: 12px; background: var(--soft); border-radius: 6px;">
+            <div id="genProgressTarget" style="font-size: 12px; color: var(--sub); margin-bottom: 6px;"></div>
             <div style="font-size: 13px; color: var(--text); margin-bottom: 6px;">
               <span id="genProgressPercent">0%</span> · <span id="genProgressTime">0 秒</span>
             </div>
@@ -422,7 +441,7 @@
             </div>
           </div>
 
-          <button class="primary" id="genBtn">生成</button>
+          <button class="primary" id="genBtn"><span id="genBtnText">生成</span></button>
           <div class="msg" id="genMsg"></div>
         </div>
 
@@ -1120,12 +1139,37 @@ function updateModelList() {
     }
     pendingLastModel = null;
     modelSel.disabled = false;
+    renderMultiModelList(models);
   }).catch(e => {
     modelSel.innerHTML = '<option value="">加载失败</option>';
     modelSel.disabled = false;
     setStatus(friendlyError(e));
   });
 }
+
+// 多模型对比：勾上后从当前供应商的模型里选几个，一次提交每个模型各出 1 张
+let multiModels = new Set();
+function renderMultiModelList(models) {
+  const list = $('multiModelList');
+  list.innerHTML = '';
+  multiModels = new Set([...multiModels].filter(m => models.includes(m)));
+  models.forEach(m => {
+    const label = document.createElement('label');
+    label.className = 'check';
+    label.style.cssText = 'margin-top: 0; padding: 4px 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--soft); cursor: pointer;';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = multiModels.has(m);
+    cb.onchange = () => { if (cb.checked) multiModels.add(m); else multiModels.delete(m); };
+    label.append(cb, document.createTextNode(m));
+    list.append(label);
+  });
+}
+$('multiModelCheck').addEventListener('change', () => {
+  const on = $('multiModelCheck').checked;
+  $('multiModelList').classList.toggle('hidden', !on);
+  $('multiModelHint').classList.toggle('hidden', !on);
+});
 
 async function fetchModels(provider) {
   let url = provider.url.replace(/\/+$/, '');
@@ -1215,7 +1259,7 @@ async function queryProviderBalance(id, btn) {
   }
 }
 
-$('genSupplier').addEventListener('change', () => { pendingLastModel = null; updateModelList(); saveLastUsed(); markSelectedProvider(); });
+$('genSupplier').addEventListener('change', () => { pendingLastModel = null; multiModels = new Set(); updateModelList(); saveLastUsed(); markSelectedProvider(); });
 $('genModel').addEventListener('change', saveLastUsed);
 
 function escapeHtml(text) {
@@ -1326,6 +1370,7 @@ $('genClearBtn').onclick = () => {
   refImages = [];
   renderRefPreviews();
   updateGenBtnState();
+  checkPromptLength();
   $('genPrompt').focus();
 };
 
@@ -1877,6 +1922,7 @@ function addCard(record, src, atTop) {
   reuse.onclick = () => {
     $('genPrompt').value = record.prompt;
     autoGrowPrompt();
+    checkPromptLength();
     updateGenBtnState();
     showTab('generate');
     $('genPrompt').focus();
@@ -1947,10 +1993,13 @@ $('genBtn').onclick = async () => {
   const supplierId = $('genSupplier').value;
   const model = $('genModel').value;
   const prompt = $('genPrompt').value.trim();
-  const n = Math.min(Math.max(parseInt($('genCount').value) || 1, 1), 4);
+  const n = Math.min(Math.max(parseInt($('genCount').value) || 1, 1), 8);
+  const multiMode = $('multiModelCheck').checked && multiModels.size >= 2;
+  const modelsToGen = multiMode ? [...multiModels] : [model];
 
   if (!supplierId) return setMsg($('genMsg'), '请选择供应商', 'error');
-  if (!model) return setMsg($('genMsg'), '请选择模型', 'error');
+  if ($('multiModelCheck').checked && multiModels.size < 2) return setMsg($('genMsg'), '多模型对比请至少选 2 个模型', 'error');
+  if (!multiMode && !model) return setMsg($('genMsg'), '请选择模型', 'error');
   if (!prompt) return setMsg($('genMsg'), '请输入提示词', 'error');
 
   const provider = providers[supplierId];
@@ -1963,6 +2012,8 @@ $('genBtn').onclick = async () => {
   const btn = $('genBtn');
   btn.disabled = true;
   generating = true;
+  $('genBtnText').textContent = '生成中…';
+  $('genProgressTarget').textContent = multiMode ? `正在用 ${provider.name} 对比 ${modelsToGen.length} 个模型…` : `正在用 ${provider.name} · ${model} 生成…`;
   setMsg($('genMsg'), '');
 
   $('genProgressWrap').classList.remove('hidden');
@@ -1979,7 +2030,7 @@ $('genBtn').onclick = async () => {
 
   // 生成中先放骨架占位卡，图回来再换成真图
   const skeletons = [];
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < (multiMode ? modelsToGen.length : n); i++) {
     const sk = document.createElement('div');
     sk.className = 'card skeleton-card';
     sk.innerHTML = '<div class="skeleton-img"></div><div class="meta">正在生成…</div>';
@@ -1990,16 +2041,21 @@ $('genBtn').onclick = async () => {
 
   try {
     const useRef = refImages.length > 0;
-    const urls = useRef
-      ? await genByEdits(provider, prompt, model, selectedSize, n, refImages.map(r => r.dataUrl), (p) => {
-          if (p > genProgressValue) setGenProgress(p);
-        })
-      : await genByImages(provider, prompt, model, selectedSize, n, (p) => {
-          // 有真实下载数据时按数据走（同样封顶 99）
-          if (p > genProgressValue) setGenProgress(p);
-        });
-
-    if (!urls.length) throw new Error('没有返回图片');
+    // 多模型对比：每个模型各出 1 张，并行发；单模型按数量出图
+    const perModel = multiMode ? 1 : n;
+    const settled = await Promise.all(modelsToGen.map(async (m) => {
+      try {
+        const u = useRef
+          ? await genByEdits(provider, prompt, m, selectedSize, perModel, refImages.map(r => r.dataUrl), (p) => { if (p > genProgressValue) setGenProgress(p); })
+          : await genByImages(provider, prompt, m, selectedSize, perModel, (p) => { if (p > genProgressValue) setGenProgress(p); });
+        return u.map(url => ({ url, model: m }));
+      } catch (e) {
+        return [{ url: null, model: m, error: friendlyError(e) }];
+      }
+    }));
+    const results = settled.flat().filter(r => r.url);
+    const failedModels = settled.flat().filter(r => r.error).map(r => r.model);
+    if (!results.length) throw new Error('没有返回图片');
 
     // 图片已生成返回，快速跳到 100
     await finishProgress();
@@ -2009,24 +2065,28 @@ $('genBtn').onclick = async () => {
     clearInterval(genProgressTimer);
     genProgressTimer = null;
 
-    setMsg($('genMsg'), `${urls.length} 张，${totalTime} 秒`, 'ok');
+    setMsg($('genMsg'), `${results.length} 张，${totalTime} 秒` + (failedModels.length ? `（${failedModels.join('、')} 生成失败）` : ''), failedModels.length ? 'error' : 'ok');
     saveLastUsed();
     // 生成成功后提示词框自动清空，下次直接写新的
     $('genPrompt').value = '';
     autoGrowPrompt();
     updateGenBtnState();
+    checkPromptLength();
+    // 有模型失败时，把多余的骨架占位卡清掉
+    while (skeletons.length > results.length) skeletons.pop().remove();
+    updateEmpty();
 
     const warns = new Set(), errs = [];
-    const saves = urls.map(async (u) => {
-      const meta = { prompt, model, mode: useRef ? 'images-ref' : 'images', size: selectedSize, gen_seconds: totalTime };
+    const saves = results.map(async (r) => {
+      const meta = { prompt, model: r.model, mode: useRef ? 'images-ref' : 'images', size: selectedSize, gen_seconds: totalTime };
       // 生成完立刻在下面显示图片，不等上传存库
       const sk = skeletons.shift();
       if (sk) sk.remove();
-      const placeholder = addCard({ ...meta, created_at: new Date().toISOString() }, u, true);
+      const placeholder = addCard({ ...meta, created_at: new Date().toISOString() }, r.url, true);
       historyOffset++;
       pendingSaves++;
       try {
-        const { record, displayUrl, warn } = await saveRecord(u, meta);
+        const { record, displayUrl, warn } = await saveRecord(r.url, meta);
         if (warn) warns.add(warn);
         // 存好后用正式记录替换占位卡片，位置不变
         const real = addCard(record, displayUrl, true);
@@ -2041,7 +2101,7 @@ $('genBtn').onclick = async () => {
     });
     await Promise.all(saves);
     updateHistoryCount();
-    if (urls.length > 0) logActivity('generate', model + ' · ' + urls.length + ' 张');
+    if (results.length > 0) logActivity('generate', (multiMode ? modelsToGen.join(',') : model) + ' · ' + results.length + ' 张');
 
     if (errs.length) {
       setMsg($('genMsg'), `有 ${errs.length} 张保存失败`, 'error');
@@ -2053,6 +2113,7 @@ $('genBtn').onclick = async () => {
     setMsg($('genMsg'), friendlyError(e), 'error');
   } finally {
     generating = false;
+    $('genBtnText').textContent = '生成';
     updateGenBtnState();
     clearInterval(genProgressTimer);
     stopSimProgress();
@@ -2060,6 +2121,7 @@ $('genBtn').onclick = async () => {
       $('genProgressWrap').classList.add('hidden');
       setGenProgress(0);
       $('genProgressTime').textContent = '0 秒';
+      $('genProgressTarget').textContent = '';
     }, 2000);
   }
 };
@@ -2074,7 +2136,14 @@ function autoGrowPrompt() {
 function updateGenBtnState() {
   $('genBtn').disabled = generating || !$('genPrompt').value.trim();
 }
-$('genPrompt').addEventListener('input', () => { autoGrowPrompt(); updateGenBtnState(); });
+// 提示词超过 1000 字提醒：部分模型可能会截断，只取前面部分
+function checkPromptLength() {
+  const len = $('genPrompt').value.length;
+  const warn = $('promptLenWarn');
+  warn.classList.toggle('hidden', len <= 1000);
+  if (len > 1000) warn.textContent = `提示词已 ${len} 字，超过 1000 字部分模型可能会截断，只取前面部分。`;
+}
+$('genPrompt').addEventListener('input', () => { autoGrowPrompt(); updateGenBtnState(); checkPromptLength(); });
 updateGenBtnState();
 
 // 生成按钮涟漪：点一下泛开一圈水纹
@@ -2101,6 +2170,10 @@ function openViewer(url) {
   const v = $('viewer');
   v.querySelector('img').src = url;
   v.style.display = 'flex';
+  // 看大图缩放淡入：每次打开都重新触发一次动画
+  v.classList.remove('zooming');
+  void v.offsetWidth;
+  v.classList.add('zooming');
   tintViewerBg(url);
 }
 // 查看大图时背景取图片主色（取不到就用默认背景）
