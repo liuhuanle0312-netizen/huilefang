@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>隐私政策 - 绘乐坊</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" href="favicon.ico" sizes="any">
+<style>
+  :root { --bg:#f5f6f8; --panel:#ffffff; --text:#1c1e24; --sub:#6b7280; --line:#e5e7eb; --accent:#2563eb; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; line-height:1.8; font-size:15px; padding:24px 16px 64px; }
+  .doc { max-width:720px; margin:0 auto; background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:28px 24px; box-shadow:0 4px 16px rgba(0,0,0,.06); }
+  .back { font-size:14px; }
+  a { color:var(--accent); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  h1 { font-size:22px; margin:12px 0 4px; }
+  .meta { color:var(--sub); font-size:13px; margin-bottom:20px; }
+  h2 { font-size:17px; margin:24px 0 8px; }
+  p { margin:8px 0; }
+  ul { margin:8px 0; padding-left:22px; }
+  li { margin:4px 0; }
+</style>
+</head>
+<body>
+<div class="doc">
+  <div class="back"><a href="index.html">← 回绘乐坊</a></div>
+  <h1>绘乐坊隐私政策</h1>
+  <div class="meta">生效日期：2026年11月12日 · 联系站长：QQ 168264129</div>
+
+  <p>绘乐坊（以下简称“本网站”）是一个聚合多个图片生成中转站 API 的轻量工具。本政策说明我们收集哪些信息、用来做什么、以及你的权利。请在使用前仔细阅读。</p>
+
+  <h2>一、我们是谁</h2>
+  <p>本网站由个人运营。本网站本身<strong>不提供图片生成模型、不运营中转站</strong>：图片由你自选的中转站及其模型生成，本网站只提供注册登录、生成记录保存与查看这些功能。</p>
+
+  <h2>二、我们收集哪些信息</h2>
+  <ul>
+    <li><strong>账号信息</strong>：注册时提供的邮箱地址；密码经加密后保存在认证服务中，我们无法看到你的明文密码。</li>
+    <li><strong>二次验证信息</strong>：如你开启二次验证，验证器信息由你自己保管。</li>
+    <li><strong>生成记录</strong>：提示词、所选模型、尺寸、生成耗时、生成时间，以及生成的图片。图片保存在你账号下的私有云存储中，仅你本人可见；网站管理员出于管理与安全需要（处理违规内容、排查故障）可以查看。</li>
+    <li><strong>本地偏好</strong>：主题、供应商列表、上次选择等偏好只保存在你自己的浏览器里，不上传。</li>
+    <li><strong>你的中转站 Key</strong>：只保存在你自己的浏览器里（localStorage），<strong>不经过、不保存在本网站的服务器与数据库</strong>。生成时，浏览器直接把 Key、提示词和参考图发往你选的中转站。</li>
+  </ul>
+
+  <h2>三、信息如何使用</h2>
+  <p>收集的信息仅用于：提供注册登录、保存与展示你的生成记录、排查故障、管理违规内容。不用于广告，不出售、不出租给任何第三方。</p>
+
+  <h2>四、第三方服务</h2>
+  <ul>
+    <li><strong>Supabase</strong>（账号、数据库、图片存储）：服务器位于日本东京。</li>
+    <li><strong>Cloudflare Turnstile</strong>：登录、注册时的人机验证。</li>
+    <li><strong>你自选的中转站</strong>：生成请求由浏览器直接发往该中转站，提示词、参考图与 Key 会提供给该中转站，遵守该中转站自己的隐私政策与服务条款；本网站无法控制其如何处理这些信息。</li>
+  </ul>
+
+  <h2>五、保存期限</h2>
+  <p>账号存在期间保存生成记录；你删除某条记录时，对应的云端图片一并删除；注销账号可联系站长（QQ：168264129）申请，核实后删除账号及全部记录。</p>
+
+  <h2>六、你的权利</h2>
+  <p>你可以查看、删除自己的生成记录，修改头像、昵称，开启或关闭二次验证，以及申请注销账号。行使权利或有疑问，联系站长：QQ 168264129。</p>
+
+  <h2>七、未成年人</h2>
+  <p>建议年满 18 周岁使用；未满 18 周岁请在监护人同意和指导下使用。</p>
+
+  <h2>八、Cookie 与本地存储</h2>
+  <p>网站使用浏览器本地存储保存登录状态与偏好，不用于广告追踪；本站不投放第三方广告。</p>
+
+  <h2>九、政策更新</h2>
+  <p>本政策更新后会在站内公示，继续使用即表示接受更新后的政策。</p>
+</div>
+</body>
+</html>

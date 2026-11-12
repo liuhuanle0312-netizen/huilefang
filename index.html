@@ -7,6 +7,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>绘乐坊</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 <link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
@@ -288,6 +291,7 @@
       <div class="center"><button class="link" id="mfaBackBtn">返回</button></div>
     </div>
     <div class="msg" id="authMsg"></div>
+    <div style="text-align: center; font-size: 12px; color: var(--sub); margin-top: 14px;">注册或登录即表示同意<a href="terms.html" target="_blank" rel="noopener">《用户协议》</a>和<a href="privacy.html" target="_blank" rel="noopener">《隐私政策》</a></div>
   </div>
 </div>
 
@@ -324,7 +328,7 @@
           <h1>关于</h1>
           <h2>绘乐坊</h2>
           <div style="font-size: 13px; line-height: 1.8; color: var(--sub);">
-            <p>一个轻量级的 AI 图片生成平台。接入 OpenAI、Google Gemini 等多个模型服务商，用你自己的 API Key 来生成图片。所有生成的图片和记录都保存在你的账号里，换设备也能看到。</p>
+            <p>一个聚合多个图片生成中转站 API 的轻量工具。你自己添加中转站、填入在中转站申请的 Key，生成请求由浏览器直接发往你选的中转站，绘乐坊本身不提供模型、不经手你的 Key。所有生成的图片和记录都保存在你的账号里，换设备也能看到。</p>
             <p style="margin-top: 16px;"><strong>功能</strong></p>
             <ul style="margin: 8px 0; padding-left: 20px;">
               <li>管理多个中转站</li>
@@ -341,6 +345,7 @@
               <li>生成的图片和记录存在你的账号下，其他用户看不到。</li>
               <li>登录支持二次验证，账号更安全。</li>
             </ul>
+            <p>完整版：<a href="privacy.html" target="_blank" rel="noopener">《隐私政策》</a> · <a href="terms.html" target="_blank" rel="noopener">《用户协议》</a></p>
             <p style="margin-top: 16px;"><strong>常见问题</strong></p>
             <details><summary>API Key 存在哪？</summary><p>只存在你当前用的浏览器里。换浏览器、换手机或者清了缓存，都要重新填一次。</p></details>
             <details><summary>换设备能看到以前生成的图吗？</summary><p>能。历史记录和图片存在云端账号里，登录同一个账号就能看到。但 API Key 不跟账号走，新设备要重新填 Key。</p></details>
