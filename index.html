@@ -280,6 +280,7 @@
     <div id="confirmWrap" class="hidden">
       <label>确认密码</label>
       <div class="auth-field"><span class="auth-icon">🔒</span><input id="authPassword2" type="password" autocomplete="new-password"></div>
+      <label class="check" style="margin-top: 10px;"><input type="checkbox" id="agreeTerms"><span>我已阅读并同意<a href="terms.html" target="_blank" rel="noopener">《用户协议》</a>和<a href="privacy.html" target="_blank" rel="noopener">《隐私政策》</a></span></label>
     </div>
     <div id="turnstileBox" class="hidden" style="margin-top: 12px;"><div id="turnstileLoading" style="font-size: 12px; color: var(--sub);">验证加载中…</div><div id="turnstileWidget"></div></div>
     <button class="primary" id="authSubmit">登录</button>
@@ -312,6 +313,7 @@
     <!-- 品牌栏 -->
     <div class="brand-bar"><span class="brand-name" id="brandName">绘乐坊</span><div class="brand-right"><button id="themeToggle" class="secondary" title="深色模式" style="padding: 6px 10px;"><span id="themeIcon">🌙</span></button><button id="avatarBtn" class="avatar-btn" title="个人资料"></button></div></div>
 
+    <div id="offlineBar" class="hidden" style="background: rgba(220,38,38,.1); color: var(--danger); font-size: 13px; text-align: center; padding: 8px 12px;">网络已断开，请检查网络后再生成</div>
     <!-- 顶部导航栏 -->
     <div class="topbar">
       <div class="topbar-left">
@@ -329,6 +331,7 @@
           <h2>绘乐坊</h2>
           <div style="font-size: 13px; line-height: 1.8; color: var(--sub);">
             <p>一个聚合多个图片生成中转站 API 的轻量工具。你自己添加中转站、填入在中转站申请的 Key，生成请求由浏览器直接发往你选的中转站，绘乐坊本身不提供模型、不经手你的 Key。所有生成的图片和记录都保存在你的账号里，换设备也能看到。</p>
+            <p style="margin-top: 8px;">本站累计生成 <strong id="totalGenCount" style="color: var(--accent);">…</strong> 张</p>
             <p style="margin-top: 16px;"><strong>功能</strong></p>
             <ul style="margin: 8px 0; padding-left: 20px;">
               <li>管理多个中转站</li>
@@ -761,6 +764,7 @@ $('authSubmit').onclick = async () => {
   const password = $('authPassword').value;
   if (!email || !password) return setMsg($('authMsg'), '请填写邮箱和密码', 'error');
   if (signupMode && password !== $('authPassword2').value) return setMsg($('authMsg'), '两次输入的密码不一致', 'error');
+  if (signupMode && !$('agreeTerms').checked) return setMsg($('authMsg'), '请先阅读并同意《用户协议》和《隐私政策》', 'error');
 
   const btn = $('authSubmit');
   btn.disabled = true;
@@ -863,6 +867,14 @@ $('resetSubmit').onclick = async () => {
   setTimeout(() => location.replace(redirectUrl), 1000);
 };
 
+// 离线提示：没网时顶栏下方显示红条，不用等报错才知道
+function updateOfflineBar() {
+  const bar = $('offlineBar');
+  if (bar) bar.classList.toggle('hidden', navigator.onLine);
+}
+window.addEventListener('online', updateOfflineBar);
+window.addEventListener('offline', updateOfflineBar);
+
 async function enterApp(user) {
   // 二次验证守门：这个账号开了 MFA 但还没输动态码，先不进应用，等输码
   try {
@@ -883,6 +895,9 @@ async function enterApp(user) {
   showTab('providers');
   loadHistory();
   updateHistoryCount();
+  restorePromptDraft();
+  updateOfflineBar();
+  loadTotalGenCount();
   checkAdminRole();
   startPresence();
   logActivity('login');
@@ -891,6 +906,16 @@ async function enterApp(user) {
     if (d && d.ip) logSecurity('login', 'IP ' + d.ip);
   }).catch(() => {});
   maybeShowOnboard();
+}
+
+// 本站累计生成张数：走数据库的安全函数统计（绕过按人隔离的行权限，登录用户都能看总数）
+async function loadTotalGenCount() {
+  const el = $('totalGenCount');
+  if (!el) return;
+  try {
+    const { data, error } = await sb.rpc('total_generations');
+    el.textContent = (!error && data != null) ? data : '—';
+  } catch (e) { el.textContent = '—'; }
 }
 
 function showTab(tab) {
@@ -911,6 +936,7 @@ function showTab(tab) {
   if (tab === 'generate') {
     updateModelList();
   }
+  if (tab === 'about') loadTotalGenCount();
 }
 
 $('btnAbout').onclick = () => showTab('about');
@@ -2086,6 +2112,7 @@ function addCard(record, src, atTop) {
   reuse.onclick = () => {
     $('genPrompt').value = record.prompt;
     autoGrowPrompt();
+    savePromptDraft();
     checkPromptLength();
     updateGenBtnState();
     showTab('generate');
@@ -2234,6 +2261,7 @@ $('genBtn').onclick = async () => {
     saveModelSettings();
     // 生成成功后提示词框自动清空，下次直接写新的
     $('genPrompt').value = '';
+    clearPromptDraft();
     autoGrowPrompt();
     updateGenBtnState();
     checkPromptLength();
@@ -2291,6 +2319,27 @@ $('genBtn').onclick = async () => {
   }
 };
 
+// 提示词草稿：正在写的提示词自动存本机，关掉页面再回来还在；生成成功就清空
+const PROMPT_DRAFT_KEY = 'imggen-prompt-draft';
+function savePromptDraft() {
+  if (!currentUser) return;
+  localStorage.setItem(PROMPT_DRAFT_KEY + '-' + currentUser.id, $('genPrompt').value);
+}
+function restorePromptDraft() {
+  if (!currentUser) return;
+  const draft = localStorage.getItem(PROMPT_DRAFT_KEY + '-' + currentUser.id) || '';
+  if (draft && !$('genPrompt').value) {
+    $('genPrompt').value = draft;
+    autoGrowPrompt();
+    checkPromptLength();
+    updateGenBtnState();
+  }
+}
+function clearPromptDraft() {
+  if (!currentUser) return;
+  localStorage.removeItem(PROMPT_DRAFT_KEY + '-' + currentUser.id);
+}
+
 // 提示词输入框自动增高（最多 200px，再多就内部滚动）
 function autoGrowPrompt() {
   const t = $('genPrompt');
@@ -2309,7 +2358,7 @@ function checkPromptLength() {
   warn.classList.toggle('hidden', len <= 1000);
   if (len > 1000) warn.textContent = `提示词已 ${len} 字，超过 1000 字部分模型可能会截断，只取前面部分。`;
 }
-$('genPrompt').addEventListener('input', () => { autoGrowPrompt(); updateGenBtnState(); checkPromptLength(); });
+$('genPrompt').addEventListener('input', () => { autoGrowPrompt(); updateGenBtnState(); checkPromptLength(); savePromptDraft(); });
 updateGenBtnState();
 
 // 生成按钮涟漪：点一下泛开一圈水纹
