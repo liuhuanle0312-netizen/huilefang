@@ -242,6 +242,9 @@
       <div class="stat-box tint-teal"><div class="stat-num" id="statNewUsers">—</div><div class="stat-label">今日新增用户</div></div>
     </div>
     <button id="adminRefreshBtn" class="secondary" style="margin: 4px 0 12px;">刷新</button>
+    <h2>网站维护</h2>
+    <div style="font-size: 13px; margin-bottom: 4px;">当前状态：<strong id="maintState">…</strong> <button id="maintToggleBtn" class="secondary" style="margin-left: 8px;">开启维护</button></div>
+    <p style="font-size: 12px; color: var(--sub); margin: 0 0 12px;">开启后全站暂停生成和注册，登录和查看历史不受影响。</p>
     <h2>用户列表</h2>
     <div id="adminUserList" style="font-size: 13px;"></div>
     <h2>安全日志</h2>
@@ -297,6 +300,10 @@ async function loadAdmin() {
   $('statToday').textContent = todayGen ?? '—';
   const { count: newUsers } = await sb.from('profiles').select('id', { count: 'exact', head: true }).gte('created_at', today.toISOString());
   $('statNewUsers').textContent = newUsers ?? '—';
+  const { data: maint } = await sb.from('site_settings').select('value').eq('key', 'maintenance').maybeSingle();
+  const maintOn = !!(maint && maint.value === 'on');
+  $('maintState').textContent = maintOn ? '维护中' : '正常';
+  $('maintToggleBtn').textContent = maintOn ? '关闭维护' : '开启维护';
   const onlineEl = $('statOnline');
   if (onlineEl && presenceChannel) onlineEl.textContent = Object.keys(presenceChannel.presenceState()).length;
 
@@ -390,6 +397,22 @@ async function loadAdmin() {
 }
 
 $('adminRefreshBtn').onclick = () => loadAdmin();
+$('maintToggleBtn').onclick = async () => {
+  const btn = $('maintToggleBtn');
+  btn.disabled = true;
+  try {
+    const { data: cur } = await sb.from('site_settings').select('value').eq('key', 'maintenance').maybeSingle();
+    const next = (cur && cur.value === 'on') ? 'off' : 'on';
+    const { error } = await sb.from('site_settings').upsert({ key: 'maintenance', value: next });
+    if (error) throw error;
+    logSecurity(next === 'on' ? 'maintenance_on' : 'maintenance_off', '');
+    loadAdmin();
+  } catch (e) {
+    setMsg($('gateMsg'), '切换失败：' + (e.message || e), 'error');
+  } finally {
+    btn.disabled = false;
+  }
+};
 
 // 入口守门：没登录 → 请先登录；登录了但不是管理员 → 记一笔并挡住
 (async () => {

@@ -269,6 +269,7 @@
   <div class="auth-box">
     <h1>绘乐坊</h1>
     <p style="text-align: center; font-size: 13px; color: var(--sub); margin: 0 0 16px;">绘你所想，乐在其中</p>
+    <div id="maintAuthBar" class="hidden" style="background: rgba(234,88,12,.1); color: #ea580c; font-size: 13px; text-align: center; padding: 8px 12px; border-radius: 8px; margin-bottom: 12px;">网站维护中，暂停注册，稍后再试</div>
     <div class="tabs">
       <button id="tabLogin" class="active">登录</button>
       <button id="tabSignup">注册</button>
@@ -314,6 +315,7 @@
     <div class="brand-bar"><span class="brand-name" id="brandName">绘乐坊</span><div class="brand-right"><button id="themeToggle" class="secondary" title="深色模式" style="padding: 6px 10px;"><span id="themeIcon">🌙</span></button><button id="avatarBtn" class="avatar-btn" title="个人资料"></button></div></div>
 
     <div id="offlineBar" class="hidden" style="background: rgba(220,38,38,.1); color: var(--danger); font-size: 13px; text-align: center; padding: 8px 12px;">网络已断开，请检查网络后再生成</div>
+    <div id="maintBar" class="hidden" style="background: rgba(234,88,12,.1); color: #ea580c; font-size: 13px; text-align: center; padding: 8px 12px;">网站维护中，暂停生成，稍后再试</div>
     <!-- 顶部导航栏 -->
     <div class="topbar">
       <div class="topbar-left">
@@ -771,6 +773,7 @@ $('authSubmit').onclick = async () => {
   try {
     const captchaToken = turnstileToken || undefined;
     if (signupMode) {
+      if (await fetchMaintenance()) { updateMaintBar(); return setMsg($('authMsg'), '网站维护中，暂停注册，稍后再试', 'error'); }
       const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: redirectUrl, captchaToken } });
       if (error) throw error;
       if (data.user && data.user.identities?.length === 0) throw new Error('already registered');
@@ -875,6 +878,24 @@ function updateOfflineBar() {
 window.addEventListener('online', updateOfflineBar);
 window.addEventListener('offline', updateOfflineBar);
 
+// 全站维护模式：开关存在数据库，全站所有人同步生效；开着时暂停生成和注册，登录和看历史不受影响
+let maintenanceOn = false;
+async function fetchMaintenance() {
+  try {
+    const { data } = await sb.from('site_settings').select('value').eq('key', 'maintenance').maybeSingle();
+    maintenanceOn = !!(data && data.value === 'on');
+  } catch (e) { maintenanceOn = false; }
+  return maintenanceOn;
+}
+function updateMaintBar() {
+  const bar = $('maintBar');
+  if (bar) bar.classList.toggle('hidden', !maintenanceOn);
+  const authBar = $('maintAuthBar');
+  if (authBar) authBar.classList.toggle('hidden', !maintenanceOn);
+}
+// 打开页面就查一次，登录页也能看到维护提示
+fetchMaintenance().then(updateMaintBar);
+
 async function enterApp(user) {
   // 二次验证守门：这个账号开了 MFA 但还没输动态码，先不进应用，等输码
   try {
@@ -897,6 +918,8 @@ async function enterApp(user) {
   updateHistoryCount();
   restorePromptDraft();
   updateOfflineBar();
+  await fetchMaintenance();
+  updateMaintBar();
   loadTotalGenCount();
   checkAdminRole();
   startPresence();
@@ -2181,6 +2204,7 @@ window.addEventListener('beforeunload', (e) => {
 });
 
 $('genBtn').onclick = async () => {
+  if (await fetchMaintenance()) { updateMaintBar(); return setMsg($('genMsg'), '网站维护中，暂停生成，稍后再试', 'error'); }
   const supplierId = $('genSupplier').value;
   const model = $('genModel').value;
   const prompt = $('genPrompt').value.trim();
