@@ -6,6 +6,7 @@
 <title>绘乐坊</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+<link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #f5f6f8;
@@ -42,7 +43,9 @@
     --panel-glass: rgba(31,41,55,.8);
   }
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); }
+  body { margin: 0; font-family: "Yuanti SC", -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif; background: var(--bg); color: var(--text); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.035 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  html.dark body { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  .brand-name, h1, .section-title, .modal-head { font-family: "ZCOOL KuaiLe", "Yuanti SC", "PingFang SC", "Microsoft YaHei", sans-serif; }
   .hidden { display: none !important; }
   h1 { font-size: 18px; margin: 0 0 16px; font-weight: 600; }
   h2 { font-size: 14px; color: var(--sub); margin: 20px 0 8px; font-weight: 600; }
@@ -90,8 +93,9 @@
   .topbar { background: var(--panel-glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 5; }
   .topbar-left { display: flex; align-items: center; gap: 8px; flex: 1; }
   .topbar-right { display: flex; align-items: center; gap: 12px; }
-  .topbar button { padding: 6px 12px; font-size: 13px; white-space: nowrap; }
+  .topbar button { padding: 6px 12px; font-size: 13px; white-space: nowrap; position: relative; }
   .topbar button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .topbar button.active::after { content: ''; position: absolute; left: 10px; right: 10px; bottom: -13px; height: 3px; border-radius: 3px 3px 0 0; background: var(--accent); }
 
   .avatar-btn { width: 32px; height: 32px; padding: 0; border-radius: 50%; border: 2px solid var(--line); background-size: cover; background-position: center; cursor: pointer; flex-shrink: 0; }
   .avatar-btn:hover { border-color: var(--accent); }
@@ -127,7 +131,8 @@
   .gen-section { margin-bottom: 20px; }
   .gen-label { font-size: 12px; color: var(--sub); margin-bottom: 6px; font-weight: 500; }
   .ratio-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-  .ratio-card { border: 1px solid var(--line); border-radius: 8px; padding: 6px 4px 5px; text-align: center; cursor: pointer; background: var(--panel); transition: border-color .15s, background-color .15s; }
+  .ratio-card { border: 1px solid var(--line); border-radius: 8px; padding: 6px 4px 5px; text-align: center; cursor: pointer; background: var(--panel); transition: border-color .15s, background-color .15s; position: relative; }
+  .ratio-card.active::after { content: '✓'; position: absolute; top: 2px; right: 6px; font-size: 12px; font-weight: 700; color: var(--accent); }
   .ratio-card:hover { border-color: var(--accent); }
   .ratio-card.active { border-color: var(--accent); background: rgba(37, 99, 235, 0.08); color: var(--accent); }
   .ratio-shape-wrap { height: 30px; display: flex; align-items: center; justify-content: center; margin-bottom: 4px; }
@@ -165,6 +170,9 @@
   .section-title { font-size: 16px; font-weight: 600; color: var(--text); margin: 4px 0 12px; }
   .gallery { display: grid; grid-template-columns: 1fr; gap: 12px; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.04); transition: box-shadow .15s; }
+  .card.deleting { transform: scale(.92); opacity: 0; transition: transform .25s ease, opacity .25s ease; }
+  .card-img-wrap { position: relative; }
+  .card-time { position: absolute; left: 0; right: 0; bottom: 0; padding: 16px 8px 6px; background: linear-gradient(transparent, rgba(0,0,0,.55)); color: #fff; font-size: 11px; pointer-events: none; }
   .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); }
   .card img { max-width: 100%; max-height: 160px; width: auto; height: auto; display: block; margin: 0 auto; cursor: zoom-in; background: var(--soft); }
   .card .broken { padding: 40px 10px; text-align: center; color: var(--sub); font-size: 13px; background: var(--soft); }
@@ -186,11 +194,16 @@
   .modal.show { display: flex; }
   .modal-box { background: var(--panel); border-radius: 10px; padding: 24px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,.2); }
   .card, .provider-card, .stat-box, .admin-user, .modal-box { border-radius: 16px; box-shadow: 0 4px 16px rgba(0,0,0,.08); }
-  html.dark .card, html.dark .provider-card, html.dark .stat-box, html.dark .admin-user, html.dark .modal-box { box-shadow: 0 4px 16px rgba(0,0,0,.35); }
+  html.dark .card, html.dark .provider-card, html.dark .stat-box, html.dark .admin-user, html.dark .modal-box { box-shadow: 0 4px 16px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.09); }
   #providerList.ios-group { background: var(--panel); border-radius: 16px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,.08); }
   #providerList.ios-group .provider-card { background: transparent; border: none; border-radius: 0; box-shadow: none; margin-bottom: 0; }
   #providerList.ios-group .provider-card + .provider-card { border-top: 1px solid var(--line); }
-  html.dark #providerList.ios-group { box-shadow: 0 4px 16px rgba(0,0,0,.35); }
+  html.dark #providerList.ios-group { box-shadow: 0 4px 16px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.09); }
+  .provider-card.selected { border: 2px solid transparent; background: linear-gradient(var(--softest), var(--softest)) padding-box, linear-gradient(135deg, #2563eb, #9333ea) border-box; }
+  #providerList.ios-group .provider-card.selected { border: 2px solid transparent; background: linear-gradient(var(--panel), var(--panel)) padding-box, linear-gradient(135deg, #2563eb, #9333ea) border-box; }
+  #genBtn { position: relative; overflow: hidden; }
+  #genBtn .ripple { position: absolute; border-radius: 50%; background: rgba(255,255,255,.55); transform: scale(0); animation: rippleAnim .6s ease-out forwards; pointer-events: none; }
+  @keyframes rippleAnim { to { transform: scale(1); opacity: 0; } }
   .stat-box { border: none; }
   .stat-box.tint-blue { background: rgba(37,99,235,.1); }
   .stat-box.tint-blue .stat-num { color: var(--accent); }
@@ -564,6 +577,7 @@ let sb, currentUser = null, recovering = false, signupMode = false, historyOffse
 let myRole = 'user';
 let providers = {};
 let selectedSize = 'auto', selectedQuality = 'medium', selectedFormat = 'auto', selectedTier = 0, genStartTime = null, genProgressTimer = null;
+let generating = false;
 let refImages = [];
 let genProgressValue = 0, genSimTimer = null;
 const PROVIDER_STORE_KEY = 'imggen-providers';
@@ -611,6 +625,7 @@ function closeModal(id) { $(id).classList.remove('show'); }
 
 function translateAuthError(e) {
   const m = e?.message || String(e);
+  if (/captcha/i.test(m)) return '人机验证没通过，请重新验证再登录';
   if (/Invalid login credentials/i.test(m)) return '邮箱或密码错误';
   if (/Email not confirmed/i.test(m)) return '邮箱还没验证，请先点击验证邮件里的链接';
   if (/already registered|already been registered/i.test(m)) return '这个邮箱已经注册过了，请直接登录';
@@ -666,6 +681,15 @@ function renderTurnstile() {
 window.addEventListener('load', renderTurnstile);
 renderTurnstile();
 
+// 登录失败计数：连续输错密码 3 次后，强制刷新人机验证并提醒
+// （人机验证不能等 3 次失败后再出现——实测 Supabase 在开了 CAPTCHA 后，
+// 每次登录都必须带 token，没带直接报 captcha 错误；所以验证框一直显示，
+// 失败 3 次后做的是“强制重新验证 + 提醒”，而不是“才显示验证框”）
+const LOGIN_FAIL_KEY = 'imggen-login-fails';
+function getLoginFails() { return parseInt(localStorage.getItem(LOGIN_FAIL_KEY) || '0', 10) || 0; }
+function resetLoginFails() { localStorage.removeItem(LOGIN_FAIL_KEY); }
+function resetTurnstile() { turnstileToken = ''; if (window.turnstile) { try { window.turnstile.reset(); } catch (e) {} } }
+
 $('authSubmit').onclick = async () => {
   const email = $('authEmail').value.trim();
   const password = $('authPassword').value;
@@ -684,12 +708,29 @@ $('authSubmit').onclick = async () => {
     } else {
       const { error } = await sb.auth.signInWithPassword({ email, password, options: { captchaToken } });
       if (error) throw error;
+      resetLoginFails();
       // 开了二次验证的账号：密码过了还要输动态码
       const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
       if (aal && aal.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') showMfaStep();
     }
   } catch (e) {
-    setMsg($('authMsg'), translateAuthError(e), 'error');
+    if (!signupMode) {
+      const m = e?.message || String(e);
+      if (/captcha/i.test(m)) {
+        // 验证码本身的问题不算密码输错：只刷新验证框
+        resetTurnstile();
+        setMsg($('authMsg'), translateAuthError(e), 'error');
+      } else if (/Invalid login credentials/i.test(m)) {
+        const fails = getLoginFails() + 1;
+        localStorage.setItem(LOGIN_FAIL_KEY, String(fails));
+        resetTurnstile();
+        setMsg($('authMsg'), fails >= 3 ? `邮箱或密码错误（已连续失败 ${fails} 次），请确认密码无误，并重新完成下方的人机验证再试` : translateAuthError(e), 'error');
+      } else {
+        setMsg($('authMsg'), translateAuthError(e), 'error');
+      }
+    } else {
+      setMsg($('authMsg'), translateAuthError(e), 'error');
+    }
   } finally {
     btn.disabled = false;
   }
@@ -919,6 +960,7 @@ function restoreLastUsedSupplier() {
     if (saved && saved.supplier && providers[saved.supplier]) {
       $('genSupplier').value = saved.supplier;
       pendingLastModel = saved.model || null;
+      markSelectedProvider();
     }
   } catch (e) {}
 }
@@ -935,10 +977,20 @@ function saveProviders() {
   updateSupplierOptions();
 }
 
+// 供应商按上次使用时间排：最近用过的在最上面，没用过的按原来顺序在后
+function sortedProviderIds() {
+  return Object.keys(providers).sort((a, b) => (providers[b].lastUsed || 0) - (providers[a].lastUsed || 0));
+}
+// 正在用的供应商，在设置列表里用渐变边框标出来
+function markSelectedProvider() {
+  const cur = $('genSupplier').value;
+  document.querySelectorAll('#providerList .provider-card').forEach(c => c.classList.toggle('selected', c.dataset.pid === cur));
+}
+
 function renderProviders() {
   const list = $('providerList');
   list.innerHTML = '';
-  const ids = Object.keys(providers);
+  const ids = sortedProviderIds();
   
   if (ids.length === 0) {
     $('emptyProviders').style.display = 'block';
@@ -950,6 +1002,7 @@ function renderProviders() {
     const p = providers[id];
     const card = document.createElement('div');
     card.className = 'provider-card';
+    card.dataset.pid = id;
     card.innerHTML = `
       <div class="provider-head">
         <div style="display: flex; align-items: center; gap: 8px;"><span class="status-dot" title="未测速"></span><div class="provider-name">${escapeHtml(p.name)}</div></div>
@@ -969,6 +1022,7 @@ function renderProviders() {
     `;
     list.append(card);
   });
+  markSelectedProvider();
 }
 
 function editProvider(id) {
@@ -1022,7 +1076,8 @@ function updateSupplierOptions() {
   const sel = $('genSupplier');
   const current = sel.value;
   sel.innerHTML = '<option value="">-- 请选择 --</option>';
-  Object.entries(providers).forEach(([id, p]) => {
+  sortedProviderIds().forEach(id => {
+    const p = providers[id];
     const opt = document.createElement('option');
     opt.value = id;
     opt.textContent = p.name;
@@ -1160,7 +1215,7 @@ async function queryProviderBalance(id, btn) {
   }
 }
 
-$('genSupplier').addEventListener('change', () => { pendingLastModel = null; updateModelList(); saveLastUsed(); });
+$('genSupplier').addEventListener('change', () => { pendingLastModel = null; updateModelList(); saveLastUsed(); markSelectedProvider(); });
 $('genModel').addEventListener('change', saveLastUsed);
 
 function escapeHtml(text) {
@@ -1270,6 +1325,7 @@ $('genClearBtn').onclick = () => {
   $('genPrompt').value = '';
   refImages = [];
   renderRefPreviews();
+  updateGenBtnState();
   $('genPrompt').focus();
 };
 
@@ -1280,6 +1336,18 @@ function renderRefPreviews() {
   refImages.forEach(r => {
     const d = document.createElement('div');
     d.className = 'ref-thumb';
+    d.title = '长按看大图';
+    // 长按看大图（550ms）：手机和电脑都支持
+    let lpTimer = null;
+    const startLp = (e) => { if (e.target.closest('.ref-remove')) return; lpTimer = setTimeout(() => { openViewer(r.dataUrl); lpTimer = null; }, 550); };
+    const cancelLp = () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } };
+    d.addEventListener('touchstart', startLp, { passive: true });
+    d.addEventListener('touchend', cancelLp);
+    d.addEventListener('touchmove', cancelLp);
+    d.addEventListener('mousedown', startLp);
+    d.addEventListener('mouseup', cancelLp);
+    d.addEventListener('mouseleave', cancelLp);
+    d.addEventListener('contextmenu', (e) => e.preventDefault());
     const img = document.createElement('img');
     img.src = r.dataUrl;
     const x = document.createElement('button');
@@ -1718,6 +1786,21 @@ function updateEmpty() {
   $('empty').style.display = $('gallery').children.length ? 'none' : 'block';
 }
 
+// 相对时间：刚刚 / X 分钟前 / X 小时前 / X 天前，超过 30 天显示日期
+function relativeTime(iso) {
+  const t = new Date(iso).getTime();
+  if (!t) return '';
+  const diff = Date.now() - t;
+  if (diff < 60000) return '刚刚';
+  const m = Math.floor(diff / 60000);
+  if (m < 60) return m + ' 分钟前';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + ' 小时前';
+  const d = Math.floor(h / 24);
+  if (d < 30) return d + ' 天前';
+  return new Date(iso).toLocaleDateString();
+}
+
 function addCard(record, src, atTop) {
   const card = document.createElement('div');
   card.className = 'card';
@@ -1753,6 +1836,14 @@ function addCard(record, src, atTop) {
     imgEl.textContent = '图片已失效';
   }
 
+  const wrap = document.createElement('div');
+  wrap.className = 'card-img-wrap';
+  wrap.append(imgEl);
+  const timeTag = document.createElement('div');
+  timeTag.className = 'card-time';
+  timeTag.textContent = relativeTime(record.created_at);
+  wrap.append(timeTag);
+
   const meta = document.createElement('div');
   meta.className = 'meta';
   
@@ -1761,10 +1852,9 @@ function addCard(record, src, atTop) {
   p.textContent = record.prompt;
   
   const info = document.createElement('div');
-  const time = new Date(record.created_at || Date.now());
-  const secs = record.gen_seconds ? ` · ${record.gen_seconds}s` : '';
+  const secs = record.gen_seconds ? record.gen_seconds + 's' : '';
   const sizeText = record.size ? (record.size === 'auto' ? '自动尺寸' : record.size) : '';
-  info.textContent = [record.model || 'unknown', sizeText, `${time.toLocaleString()}${secs}`].filter(Boolean).join(' · ');
+  info.textContent = [record.model || 'unknown', sizeText, secs].filter(Boolean).join(' · ');
   info.style.marginBottom = '8px';
 
   const actions = document.createElement('div');
@@ -1787,6 +1877,7 @@ function addCard(record, src, atTop) {
   reuse.onclick = () => {
     $('genPrompt').value = record.prompt;
     autoGrowPrompt();
+    updateGenBtnState();
     showTab('generate');
     $('genPrompt').focus();
   };
@@ -1827,11 +1918,12 @@ function addCard(record, src, atTop) {
     del.className = 'danger';
     del.onclick = async () => {
       if (!confirm('确定删除吗？')) return;
+      del.disabled = true;
       if (record.image_path) await sb.storage.from('images').remove([record.image_path]);
       const { error } = await sb.from('generations').delete().eq('id', record.id);
-      if (error) return setStatus('删除失败', true);
-      card.remove();
-      updateEmpty();
+      if (error) { del.disabled = false; return setStatus('删除失败', true); }
+      card.classList.add('deleting');
+      setTimeout(() => { card.remove(); updateEmpty(); }, 260);
       updateHistoryCount();
       logActivity('delete', record.model || '');
     };
@@ -1839,7 +1931,7 @@ function addCard(record, src, atTop) {
   }
 
   meta.append(p, info, actions);
-  card.append(imgEl, meta);
+  card.append(wrap, meta);
   atTop ? $('gallery').prepend(card) : $('gallery').append(card);
   updateEmpty();
   return card;
@@ -1863,9 +1955,14 @@ $('genBtn').onclick = async () => {
 
   const provider = providers[supplierId];
   if (!provider.key) return setMsg($('genMsg'), 'API Key 未保存', 'error');
+  // 记下这次用的供应商，下次打开它排最上面
+  provider.lastUsed = Date.now();
+  saveProviders();
+  renderProviders();
 
   const btn = $('genBtn');
   btn.disabled = true;
+  generating = true;
   setMsg($('genMsg'), '');
 
   $('genProgressWrap').classList.remove('hidden');
@@ -1914,6 +2011,10 @@ $('genBtn').onclick = async () => {
 
     setMsg($('genMsg'), `${urls.length} 张，${totalTime} 秒`, 'ok');
     saveLastUsed();
+    // 生成成功后提示词框自动清空，下次直接写新的
+    $('genPrompt').value = '';
+    autoGrowPrompt();
+    updateGenBtnState();
 
     const warns = new Set(), errs = [];
     const saves = urls.map(async (u) => {
@@ -1951,7 +2052,8 @@ $('genBtn').onclick = async () => {
     clearInterval(genProgressTimer);
     setMsg($('genMsg'), friendlyError(e), 'error');
   } finally {
-    btn.disabled = false;
+    generating = false;
+    updateGenBtnState();
     clearInterval(genProgressTimer);
     stopSimProgress();
     setTimeout(() => {
@@ -1968,7 +2070,28 @@ function autoGrowPrompt() {
   t.style.height = 'auto';
   t.style.height = Math.min(t.scrollHeight, 200) + 'px';
 }
-$('genPrompt').addEventListener('input', autoGrowPrompt);
+// 生成按钮：没写提示词时灰掉，写了才可用（生成中也一直灰着）
+function updateGenBtnState() {
+  $('genBtn').disabled = generating || !$('genPrompt').value.trim();
+}
+$('genPrompt').addEventListener('input', () => { autoGrowPrompt(); updateGenBtnState(); });
+updateGenBtnState();
+
+// 生成按钮涟漪：点一下泛开一圈水纹
+$('genBtn').addEventListener('click', (e) => {
+  const btn = $('genBtn');
+  const r = btn.getBoundingClientRect();
+  const s = document.createElement('span');
+  s.className = 'ripple';
+  const size = Math.max(r.width, r.height) * 2;
+  const x = (e.clientX || r.left + r.width / 2) - r.left;
+  const y = (e.clientY || r.top + r.height / 2) - r.top;
+  s.style.width = s.style.height = size + 'px';
+  s.style.left = (x - size / 2) + 'px';
+  s.style.top = (y - size / 2) + 'px';
+  btn.append(s);
+  setTimeout(() => s.remove(), 650);
+});
 
 $('genPrompt').addEventListener('keydown', e => {
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('genBtn').click();
