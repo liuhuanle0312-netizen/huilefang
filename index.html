@@ -1025,6 +1025,46 @@ function restoreLastUsedSupplier() {
     }
   } catch (e) {}
 }
+// 每个模型记住自己上次用的比例和画质：切模型时自动恢复，不用每次重选
+const MODEL_SETTINGS_KEY = 'imggen-model-settings';
+function getModelSettings() {
+  if (!currentUser) return {};
+  try { return JSON.parse(localStorage.getItem(MODEL_SETTINGS_KEY + '-' + currentUser.id) || '{}'); } catch (e) { return {}; }
+}
+function modelSettingsKey() {
+  const supplierId = $('genSupplier').value, model = $('genModel').value;
+  return (supplierId && model) ? supplierId + '::' + model : null;
+}
+function saveModelSettings() {
+  const key = modelSettingsKey();
+  if (!key) return;
+  const active = $('sizeOptions').querySelector('.ratio-card.active');
+  const all = getModelSettings();
+  all[key] = { ratio: active ? active.dataset.ratio : 'auto', quality: selectedQuality, tier: selectedTier };
+  localStorage.setItem(MODEL_SETTINGS_KEY + '-' + currentUser.id, JSON.stringify(all));
+}
+function applyModelSettings() {
+  const key = modelSettingsKey();
+  if (!key) return;
+  const saved = getModelSettings()[key];
+  if (!saved) return;
+  if (saved.ratio) {
+    const card = $('sizeOptions').querySelector('.ratio-card[data-ratio="' + saved.ratio + '"]');
+    if (card) {
+      $('sizeOptions').querySelectorAll('.ratio-card').forEach(o => o.classList.remove('active'));
+      card.classList.add('active');
+    }
+  }
+  selectedTier = Math.min(Math.max(0, saved.tier || 0), 3);
+  renderTiers();
+  if (saved.quality) {
+    selectedQuality = saved.quality;
+    $('qualityOptions').querySelectorAll('.select-box-option').forEach(o => o.classList.toggle('active', o.dataset.quality === saved.quality));
+    const activeOpt = $('qualityOptions').querySelector('.select-box-option.active');
+    if (activeOpt) $('qualityDisplay').innerHTML = activeOpt.textContent + ' <span>▼</span>';
+  }
+}
+
 function loadProviders() {
   const saved = localStorage.getItem(PROVIDER_STORE_KEY + '-' + currentUser.id) || '{}';
   providers = JSON.parse(saved);
@@ -1215,6 +1255,7 @@ function updateModelList() {
     }
     pendingLastModel = null;
     modelSel.disabled = false;
+    applyModelSettings();
     renderMultiModelList(models);
     setModelCount(supplierId, models.length);
   }).catch(e => {
@@ -1343,7 +1384,7 @@ async function queryProviderBalance(id, btn) {
 }
 
 $('genSupplier').addEventListener('change', () => { pendingLastModel = null; multiModels = new Set(); updateModelList(); saveLastUsed(); markSelectedProvider(); });
-$('genModel').addEventListener('change', saveLastUsed);
+$('genModel').addEventListener('change', () => { saveLastUsed(); applyModelSettings(); });
 
 function escapeHtml(text) {
   const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
@@ -1387,6 +1428,7 @@ function renderTiers() {
       selectedSize = t.size;
       box.querySelectorAll('.tier-chip').forEach(o => o.classList.remove('active'));
       chip.classList.add('active');
+      saveModelSettings();
     };
     box.append(chip);
   });
@@ -1401,6 +1443,7 @@ $('sizeOptions').querySelectorAll('.ratio-card').forEach(card => {
     card.classList.add('active');
     selectedTier = 0;
     renderTiers();
+    saveModelSettings();
   });
 });
 renderTiers();
@@ -1418,6 +1461,7 @@ $('qualityOptions').querySelectorAll('.select-box-option').forEach(opt => {
     selectedQuality = opt.dataset.quality;
     $('qualityDisplay').innerHTML = opt.textContent + ' <span>▼</span>';
     $('qualityOptions').style.display = 'none';
+    saveModelSettings();
   });
 });
 
@@ -1861,6 +1905,7 @@ async function saveRecord(src, meta) {
   let image_path = null, image_url = null, warn = '';
   try {
     const blob = await toBlob(src);
+    meta.file_size_bytes = blob.size;
     const type = blob.type && blob.type.startsWith('image/') ? blob.type : 'image/png';
     const ext = ({ 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/svg+xml': 'svg' })[type] || 'png';
     const path = `${currentUser.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
@@ -1913,6 +1958,14 @@ $('loadMore').onclick = loadHistory;
 
 function updateEmpty() {
   $('empty').style.display = $('gallery').children.length ? 'none' : 'block';
+}
+
+// 文件大小：字节数转成 KB / MB 显示
+function formatFileSize(n) {
+  if (!n || n <= 0) return '';
+  if (n < 1024) return n + 'B';
+  if (n < 1024 * 1024) return (n / 1024 >= 100 ? Math.round(n / 1024) : (n / 1024).toFixed(1).replace(/\.0$/, '')) + 'KB';
+  return (n / 1024 / 1024).toFixed(1).replace(/\.0$/, '') + 'MB';
 }
 
 // 相对时间：刚刚 / X 分钟前 / X 小时前 / X 天前，超过 30 天显示日期
@@ -1985,15 +2038,24 @@ function addCard(record, src, atTop) {
   const info = document.createElement('div');
   const secs = record.gen_seconds ? record.gen_seconds + 's' : '';
   const sizeText = record.size ? (record.size === 'auto' ? '自动尺寸' : record.size) : '';
-  info.textContent = [record.model || 'unknown', sizeText, secs].filter(Boolean).join(' · ');
+  let dimsText = '', sizeVal = formatFileSize(record.file_size_bytes);
+  const refreshInfo = () => { info.textContent = [record.model || 'unknown', sizeText, dimsText, secs, sizeVal].filter(Boolean).join(' · '); };
+  refreshInfo();
   info.style.marginBottom = '8px';
   // 显示图片实际宽高像素（图加载完才知道；缓存图可能已经加载完了）
   const setDims = () => {
     if (imgEl.naturalWidth) {
-      const dims = imgEl.naturalWidth + '×' + imgEl.naturalHeight;
-      info.textContent = [record.model || 'unknown', sizeText, dims, secs].filter(Boolean).join(' · ');
+      dimsText = imgEl.naturalWidth + '×' + imgEl.naturalHeight;
+      refreshInfo();
     }
   };
+  // 老记录没存文件大小：读一次图片头拿 Content-Length 补上，拿不到就不显示
+  if (!sizeVal && src && src.startsWith('http')) {
+    fetch(src, { method: 'HEAD' }).then(res => {
+      const len = res.headers.get('content-length');
+      if (len) { sizeVal = formatFileSize(parseInt(len, 10)); refreshInfo(); }
+    }).catch(() => {});
+  }
   if (imgEl.tagName === 'IMG') {
     imgEl.addEventListener('load', setDims);
     if (imgEl.complete) setDims();
@@ -2164,6 +2226,7 @@ $('genBtn').onclick = async () => {
 
     setMsg($('genMsg'), `${results.length} 张，${totalTime} 秒` + (failedModels.length ? `（${failedModels.join('、')} 生成失败）` : ''), failedModels.length ? 'error' : 'ok');
     saveLastUsed();
+    saveModelSettings();
     // 生成成功后提示词框自动清空，下次直接写新的
     $('genPrompt').value = '';
     autoGrowPrompt();
