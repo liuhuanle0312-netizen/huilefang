@@ -203,9 +203,9 @@
   @keyframes viewerZoomIn { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
   #viewer.zooming img { animation: viewerZoomIn .25s ease-out; }
 
-  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.3); display: none; align-items: center; justify-content: center; z-index: 20; }
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.35); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); display: none; align-items: center; justify-content: center; z-index: 20; }
   .modal.show { display: flex; }
-  .modal-box { background: var(--panel); border-radius: 10px; padding: 24px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,.2); }
+  .modal-box { position: relative; background: var(--panel); border-radius: 10px; padding: 24px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,.2); }
   .card, .provider-card, .stat-box, .admin-user, .modal-box { border-radius: 16px; box-shadow: 0 4px 16px rgba(0,0,0,.08); }
   html.dark .card, html.dark .provider-card, html.dark .stat-box, html.dark .admin-user, html.dark .modal-box { box-shadow: 0 4px 16px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.09); }
   #providerList.ios-group { background: var(--panel); border-radius: 16px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,.08); }
@@ -229,7 +229,7 @@
   html.dark .stat-box.tint-orange .stat-num { color: #fb923c; }
   html.dark .stat-box.tint-purple .stat-num { color: #c084fc; }
   .modal-head { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
-  .modal-close { position: absolute; top: 16px; right: 16px; background: none; border: none; color: var(--sub); cursor: pointer; font-size: 20px; }
+  .modal-close { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: var(--soft); border: 1px solid var(--line); border-radius: 50%; color: var(--text); cursor: pointer; font-size: 18px; line-height: 1; padding: 0; z-index: 1; }
 
   .profile-section { text-align: center; margin-bottom: 24px; }
   .profile-avatar-display { width: 80px; height: 80px; border-radius: 50%; margin: 0 auto 12px; border: 2px solid var(--line); background-size: cover; background-position: center; }
@@ -1920,6 +1920,17 @@ function addCard(record, src, atTop) {
   const sizeText = record.size ? (record.size === 'auto' ? '自动尺寸' : record.size) : '';
   info.textContent = [record.model || 'unknown', sizeText, secs].filter(Boolean).join(' · ');
   info.style.marginBottom = '8px';
+  // 显示图片实际宽高像素（图加载完才知道；缓存图可能已经加载完了）
+  const setDims = () => {
+    if (imgEl.naturalWidth) {
+      const dims = imgEl.naturalWidth + '×' + imgEl.naturalHeight;
+      info.textContent = [record.model || 'unknown', sizeText, dims, secs].filter(Boolean).join(' · ');
+    }
+  };
+  if (imgEl.tagName === 'IMG') {
+    imgEl.addEventListener('load', setDims);
+    if (imgEl.complete) setDims();
+  }
 
   const actions = document.createElement('div');
   actions.className = 'actions';
