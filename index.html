@@ -134,9 +134,8 @@
 
   .provider-list { margin-top: 16px; }
   .provider-card { background: var(--softest); border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin-bottom: 8px; }
-  .drag-handle { cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; color: var(--sub); font-size: 15px; padding: 2px 4px; flex-shrink: 0; }
-  .drag-handle:active { cursor: grabbing; }
-  .provider-card.dragging { opacity: .55; }
+  .move-btns { display: flex; flex-direction: column; line-height: 1; flex-shrink: 0; }
+  .move-btn { background: none; border: none; padding: 0; margin: 0; font-size: 9px; color: var(--sub); cursor: pointer; line-height: 1.15; }
   .provider-tools { margin-top: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .provider-tools button { padding: 4px 10px; font-size: 12px; }
   .stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 12px 0; }
@@ -1276,14 +1275,14 @@ function renderProviders() {
   }
   $('emptyProviders').style.display = 'none';
 
-  ids.forEach(id => {
+  ids.forEach((id, idx) => {
     const p = providers[id];
     const card = document.createElement('div');
     card.className = 'provider-card';
     card.dataset.pid = id;
     card.innerHTML = `
       <div class="provider-head">
-        <div style="display: flex; align-items: center; gap: 8px;"><span class="drag-handle" title="按住拖动排序">⋮⋮</span><span class="status-dot" title="未测速"></span><div class="provider-name">${escapeHtml(p.name)}</div></div>
+        <div style="display: flex; align-items: center; gap: 8px;"><span class="move-btns"><button class="move-btn" ${idx === 0 ? 'disabled' : ''} onclick="moveProvider('${id}', -1)" title="上移">▲</button><button class="move-btn" ${idx === ids.length - 1 ? 'disabled' : ''} onclick="moveProvider('${id}', 1)" title="下移">▼</button></span><span class="status-dot" title="未测速"></span><div class="provider-name">${escapeHtml(p.name)}</div></div>
         <div class="provider-actions">
           <button onclick="editProvider('${id}')">编辑</button>
           <button onclick="deleteProvider('${id}')" style="color: var(--danger);">删除</button>
@@ -1300,45 +1299,21 @@ function renderProviders() {
       </div>
     `;
     list.append(card);
-    card.querySelector('.drag-handle').addEventListener('pointerdown', (e) => startProviderDrag(e, card));
   });
   markSelectedProvider();
   loadModelCounts();
 }
 
-// 供应商拖动排序：按住手柄拖动，松手后保存新顺序
-let providerDrag = null;
-function startProviderDrag(e, card) {
-  if (e.button != null && e.button !== 0) return;
-  e.preventDefault();
-  const handle = e.currentTarget;
-  try { handle.setPointerCapture(e.pointerId); } catch (err) {}
-  providerDrag = { card, pointerId: e.pointerId };
-  card.classList.add('dragging');
-  const move = (ev) => {
-    if (!providerDrag || ev.pointerId !== providerDrag.pointerId) return;
-    const el = document.elementFromPoint(ev.clientX, ev.clientY);
-    const over = el && el.closest ? el.closest('#providerList .provider-card') : null;
-    if (!over || over === card) return;
-    const r = over.getBoundingClientRect();
-    const list = $('providerList');
-    if (ev.clientY < r.top + r.height / 2) list.insertBefore(card, over);
-    else list.insertBefore(card, over.nextSibling);
-  };
-  const up = (ev) => {
-    if (!providerDrag || ev.pointerId !== providerDrag.pointerId) return;
-    handle.removeEventListener('pointermove', move);
-    handle.removeEventListener('pointerup', up);
-    handle.removeEventListener('pointercancel', up);
-    card.classList.remove('dragging');
-    providerDrag = null;
-    const ids = [...$('providerList').querySelectorAll('.provider-card')].map(c => c.dataset.pid);
-    saveProviderOrder(ids);
-    renderProviders();
-  };
-  handle.addEventListener('pointermove', move);
-  handle.addEventListener('pointerup', up);
-  handle.addEventListener('pointercancel', up);
+// 供应商上下移动：点 ▲ 上移一位，点 ▼ 下移一位
+function moveProvider(id, dir) {
+  let order = loadProviderOrder();
+  if (!order) order = sortedProviderIds();
+  const i = order.indexOf(id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= order.length) return;
+  [order[i], order[j]] = [order[j], order[i]];
+  saveProviderOrder(order);
+  renderProviders();
 }
 
 function editProvider(id) {
