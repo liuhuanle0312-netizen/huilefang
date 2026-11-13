@@ -1425,6 +1425,8 @@ function updateSupplierOptions() {
   sel.value = current;
 }
 
+// 模型列表请求序号：快速切换供应商时，只认最新一次的结果
+let modelListReq = 0;
 function updateModelList() {
   const supplierId = $('genSupplier').value;
   const modelSel = $('genModel');
@@ -1444,7 +1446,9 @@ function updateModelList() {
   modelSel.innerHTML = '<option value="">正在加载…</option>';
   modelSel.disabled = true;
 
+  const req = ++modelListReq;
   fetchModels(provider).then(models => {
+    if (req !== modelListReq) return; // 供应商又换了，这份旧结果不要了
     modelSel.innerHTML = '<option value="" disabled selected>选择模型</option>';
     if (models.length === 0) {
       modelSel.innerHTML = '<option value="">没有加载到模型</option>';
@@ -1463,6 +1467,7 @@ function updateModelList() {
     renderMultiModelList(models);
     setModelCount(supplierId, models.length);
   }).catch(e => {
+    if (req !== modelListReq) return; // 同上，旧请求失败也不用报
     modelSel.innerHTML = '<option value="">加载失败</option>';
     modelSel.disabled = false;
     setStatus(friendlyError(e));
@@ -2491,12 +2496,17 @@ function addCard(record, src, atTop, thumbSrc) {
 }
 
 let pendingSaves = 0;
-// 有图片正在存历史时，刷新或离开前提醒，避免保存被打断导致图片丢失
+// 有图片正在存历史、或正在生成时，刷新或离开前提醒，避免扣了费图也没了
 window.addEventListener('beforeunload', (e) => {
-  if (pendingSaves > 0) { e.preventDefault(); e.returnValue = ''; }
+  if (pendingSaves > 0 || generating) { e.preventDefault(); e.returnValue = ''; }
 });
 
 $('genBtn').onclick = async () => {
+  // 防重复点击：检查必须在第一行同步做，否则连续点两下会发两次生成、扣两次费
+  if (generating) return;
+  generating = true;
+  $('genBtn').disabled = true;
+  try {
   const { data: { session } } = await sb.auth.getSession();
   if (!session) { showLoginExpired(); return; }
   if (await fetchMaintenance()) { updateMaintBar(); return setMsg($('genMsg'), '网站维护中，暂停生成，稍后再试', 'error'); }
@@ -2519,9 +2529,6 @@ $('genBtn').onclick = async () => {
   saveProviders();
   renderProviders();
 
-  const btn = $('genBtn');
-  btn.disabled = true;
-  generating = true;
   $('genBtnText').textContent = '生成中…';
   $('genProgressTarget').textContent = multiMode ? `正在用 ${provider.name} 对比 ${modelsToGen.length} 个模型…` : `正在用 ${provider.name} · ${model} 生成…`;
   setMsg($('genMsg'), '');
@@ -2554,11 +2561,13 @@ $('genBtn').onclick = async () => {
     // 多模型对比：每个模型各出 1 张，并行发；单模型按数量出图
     const perModel = multiMode ? 1 : n;
     const settled = await Promise.all(modelsToGen.map(async (m) => {
+      const t0 = Date.now();
       try {
         const u = useRef
           ? await genByEdits(provider, prompt, m, selectedSize, perModel, refImages.map(r => r.dataUrl), (p) => { if (p > genProgressValue) setGenProgress(p); })
           : await genByImages(provider, prompt, m, selectedSize, perModel, (p) => { if (p > genProgressValue) setGenProgress(p); });
-        return u.map(url => ({ url, model: m }));
+        const secs = Math.max(1, Math.round((Date.now() - t0) / 1000));
+        return u.map(url => ({ url, model: m, seconds: secs }));
       } catch (e) {
         return [{ url: null, model: m, error: friendlyError(e) }];
       }
@@ -2597,7 +2606,7 @@ $('genBtn').onclick = async () => {
 
     const warns = new Set(), errs = [];
     const saves = results.map(async (r) => {
-      const meta = { prompt, model: r.model, mode: useRef ? 'images-ref' : 'images', size: selectedSize, gen_seconds: totalTime };
+      const meta = { prompt, model: r.model, mode: useRef ? 'images-ref' : 'images', size: selectedSize, gen_seconds: r.seconds || totalTime };
       // 生成完立刻在下面显示图片，不等上传存库
       const sk = skeletons.shift();
       if (sk) sk.remove();
@@ -2670,6 +2679,14 @@ $('genBtn').onclick = async () => {
       $('genProgressTime').textContent = '0 秒';
       $('genProgressTarget').textContent = '';
     }, 2000);
+  }
+  } catch (e) {
+    // 生成开始前的检查（登录、维护）出错也报出来，别静默失败
+    setMsg($('genMsg'), friendlyError(e), 'error');
+  } finally {
+    generating = false;
+    $('genBtnText').textContent = '生成';
+    updateGenBtnState();
   }
 };
 

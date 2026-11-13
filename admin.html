@@ -359,7 +359,8 @@ async function loadAdmin() {
   const onlineEl = $('statOnline');
   if (onlineEl && presenceChannel) onlineEl.textContent = Object.keys(presenceChannel.presenceState()).length;
 
-  const { data: users } = await sb.from('profiles').select('id, email, role, created_at').order('created_at', { ascending: true });
+  const { data: users, error: usersErr } = await sb.from('profiles').select('id, email, role, created_at').order('created_at', { ascending: true });
+  if (usersErr) setMsg($('gateMsg'), '用户列表加载失败，其他部分照常显示', 'error');
   const list = $('adminUserList');
   list.innerHTML = '';
   (users || []).forEach(u => {
