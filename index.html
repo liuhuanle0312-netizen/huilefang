@@ -659,6 +659,9 @@ $('brandName').onclick = () => {
 let sb, currentUser = null, recovering = false, signupMode = false, historyOffset = 0;
 let myRole = 'user';
 let providers = {};
+// 长时间没打开才要重新登录：7 天内打开过就直接进，超过 7 天或从没登录过才停在登录页
+const IDLE_LIMIT_MS = 7 * 24 * 60 * 60 * 1000;
+const LAST_VISIT_KEY = 'imggen-last-visit';
 let selectedSize = 'auto', selectedQuality = 'medium', selectedFormat = 'auto', selectedTier = 0, genStartTime = null, genProgressTimer = null;
 let generating = false;
 let refImages = [];
@@ -729,21 +732,35 @@ if (SUPABASE_URL.includes('你的项目') || !window.supabase) {
       if (event === 'PASSWORD_RECOVERY') { recovering = true; show('viewReset'); return; }
       if (recovering) return;
       const user = session?.user || null;
-      // 进站先停在登录页：本地就算还存着登录态，也要主动登录一次才进主体
-      // （INITIAL_SESSION 和 TOKEN_REFRESHED 都不直接进应用，只有主动登录的 SIGNED_IN 才进）
-      if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
+      // 刚打开网站时按 7 天闲置判断：7 天内来过就直接进，超过 7 天或从没进过就停在登录页
+      if (event === 'INITIAL_SESSION') {
         if (!currentUser) {
           if (user && user.email) $('authEmail').value = user.email;
+          if (user) {
+            const last = parseInt(localStorage.getItem(LAST_VISIT_KEY + '-' + user.id) || '0', 10) || 0;
+            if (last && Date.now() - last < IDLE_LIMIT_MS) { enterApp(user); return; }
+            // 超过 7 天没打开、或之前没记过访问时间：清掉旧登录态，必须重新登录
+            sb.auth.signOut().catch(() => {});
+          }
           show('viewAuth');
           updateMaintBar();
         }
         return;
       }
+      // 令牌在应用里正常续期；在登录页什么都不做
+      if (event === 'TOKEN_REFRESHED') return;
       if (event === 'SIGNED_IN' && user && user.id !== currentUser?.id) enterApp(user);
       else if (!user) { const wasIn = !!currentUser; currentUser = null; show('viewAuth'); updateMaintBar(); if (wasIn) setMsg($('authMsg'), '登录已过期，请重新登录', 'error'); }
     }, 0);
   });
 }
+
+// 页面从后台切回来也算一次打开，7 天倒计时跟着刷新
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && currentUser) {
+    try { localStorage.setItem(LAST_VISIT_KEY + '-' + currentUser.id, String(Date.now())); } catch (e) {}
+  }
+});
 
 // 登录过期：自动回登录页并提示
 function showLoginExpired() {
@@ -952,6 +969,8 @@ async function enterApp(user) {
     }
   } catch (e) {}
   currentUser = user;
+  // 记下这次打开的时间，下次 7 天内再来就直接进
+  try { localStorage.setItem(LAST_VISIT_KEY + '-' + user.id, String(Date.now())); } catch (e) {}
   history.replaceState(null, '', redirectUrl);
   loadProviders();
   loadProfile();
