@@ -685,7 +685,7 @@ function friendlyError(e) {
   if (code === 400) {
     if (/content_policy|safety|moderation/i.test(raw)) return '提示词可能违规，换个说法再试';
     if (/not supported|unsupported/i.test(raw)) return '这个模型不支持这个接口，换个模型试试';
-    return '请求被拒绝了：' + raw;
+    return '请求被拒绝了：' + raw.replace(/^请求被拒绝了：/, '');
   }
   if (code >= 500) return '中转站那边出问题了（HTTP ' + code + '），等一会儿再试';
   return raw || '出错了，再试一次';
@@ -911,7 +911,7 @@ window.addEventListener('offline', updateOfflineBar);
 let maintenanceOn = false;
 async function fetchMaintenance() {
   try {
-    const { data } = await sb.from('site_settings').select('value').eq('key', 'maintenance').maybeSingle();
+    const { data } = await retryOnce(() => sb.from('site_settings').select('value').eq('key', 'maintenance').maybeSingle());
     maintenanceOn = !!(data && data.value === 'on');
   } catch (e) { maintenanceOn = false; }
   return maintenanceOn;
@@ -1108,19 +1108,27 @@ function r2ImageUrl(key, token) {
 async function r2Upload(blob, ext, type) {
   const token = await r2Token();
   if (!token) throw new Error('登录已过期');
-  const res = await fetch(R2_WORKER_URL + '/upload?ext=' + ext, {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + token, 'Content-Type': type },
-    body: blob,
-  });
-  if (!res.ok) {
-    let msg = '图片上传失败';
-    try { const j = await res.json(); if (j && j.error) msg = j.error; } catch (e) {}
-    throw new Error(msg);
-  }
-  const j = await res.json();
-  if (!j || !j.key) throw new Error('图片上传失败');
-  return j.key;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 120000);
+  try {
+    const res = await fetch(R2_WORKER_URL + '/upload?ext=' + ext, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': type },
+      body: blob,
+      signal: ctrl.signal,
+    });
+    if (!res.ok) {
+      let msg = '图片上传失败';
+      try { const j = await res.json(); if (j && j.error) msg = j.error; } catch (e) {}
+      throw new Error(msg);
+    }
+    const j = await res.json();
+    if (!j || !j.key) throw new Error('图片上传失败');
+    return j.key;
+  } catch (e) {
+    if (e && e.name === 'AbortError') throw new Error('图片上传超时');
+    throw e;
+  } finally { clearTimeout(timer); }
 }
 async function r2Delete(key) {
   const token = await r2Token();
@@ -1131,6 +1139,14 @@ async function r2Delete(key) {
       headers: { Authorization: 'Bearer ' + token },
     });
   } catch (e) {}
+}
+
+// R2 不可用时的备用上传：走原来的 Supabase 存储桶
+async function supabaseUpload(blob, ext, type) {
+  const path = currentUser.id + '/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.' + ext;
+  const { error } = await sb.storage.from('images').upload(path, blob, { contentType: type, upsert: false });
+  if (error) throw new Error('图片上传失败');
+  return path;
 }
 
 
@@ -1455,9 +1471,9 @@ async function fetchModels(provider) {
   let url = provider.url.replace(/\/+$/, '');
   if (!/\/v\d+$/.test(url)) url += '/v1';
   
-  const res = await fetch(url + '/models', {
+  const res = await retryOnce(() => fetch(url + '/models', {
     headers: { 'Authorization': 'Bearer ' + provider.key }
-  });
+  }));
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   
   const data = await res.json();
@@ -1958,8 +1974,20 @@ async function request(provider, path, body) {
   return data;
 }
 
+// 免费读取失败自动重试一次（只读操作才重试，生成不重试）
+async function retryOnce(fn) {
+  try { return await fn(); }
+  catch (e) {
+    await new Promise(r => setTimeout(r, 1200));
+    return await fn();
+  }
+}
+
 async function fetchJsonWithProgress(url, options, onProgress) {
-  const res = await fetch(url, options);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 300000);
+  try {
+  const res = await fetch(url, { ...options, signal: ctrl.signal });
   const total = Number(res.headers.get('content-length')) || 0;
   if (!res.body || !res.body.getReader) {
     const text = await res.text();
@@ -1994,6 +2022,10 @@ async function fetchJsonWithProgress(url, options, onProgress) {
     throw new Error(`HTTP ${res.status}：${msg}`);
   }
   return data;
+  } catch (e) {
+    if (e && e.name === 'AbortError') { const err = new Error('请求超时'); err.name = 'AbortError'; throw err; }
+    throw e;
+  } finally { clearTimeout(timer); }
 }
 
 async function genByImages(provider, prompt, model, size, n, onProgress) {
@@ -2058,9 +2090,16 @@ async function genByEdits(provider, prompt, model, size, n, refUrls, onProgress)
 }
 
 async function toBlob(src) {
-  const res = await fetch(src);
-  if (!res.ok) throw new Error('下载图片失败');
-  return res.blob();
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 120000);
+  try {
+    const res = await fetch(src, { signal: ctrl.signal });
+    if (!res.ok) throw new Error('下载图片失败');
+    return await res.blob();
+  } catch (e) {
+    if (e && e.name === 'AbortError') throw new Error('下载图片超时');
+    throw e;
+  } finally { clearTimeout(timer); }
 }
 
 async function saveRecord(src, meta) {
@@ -2071,8 +2110,13 @@ async function saveRecord(src, meta) {
     const type = blob.type && blob.type.startsWith('image/') ? blob.type : 'image/png';
     const ext = ({ 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/svg+xml': 'svg' })[type] || 'png';
 
-    const key = await r2Upload(blob, ext, type);
-    image_path = 'r2:' + key;
+    try {
+      const key = await r2Upload(blob, ext, type);
+      image_path = 'r2:' + key;
+    } catch (e) {
+      // R2 不可用时回退到 Supabase 存储，图不会丢
+      image_path = await supabaseUpload(blob, ext, type);
+    }
   } catch (e) {
     if (src.startsWith('data:')) throw new Error('图片上传失败');
     image_url = src;
@@ -2094,9 +2138,15 @@ async function updateHistoryCount() {
 
 async function loadHistory() {
   $('loadMore').disabled = true;
-  const { data, error } = await sb.from('generations').select('*')
-    .order('created_at', { ascending: false })
-    .range(historyOffset, historyOffset + PAGE_SIZE - 1);
+  let data, error;
+  try {
+    ({ data, error } = await retryOnce(() => sb.from('generations').select('*')
+      .order('created_at', { ascending: false })
+      .range(historyOffset, historyOffset + PAGE_SIZE - 1)));
+  } catch (e) {
+    $('loadMore').disabled = false;
+    return setStatus('读取失败', true);
+  }
   $('loadMore').disabled = false;
   
   if (error) {
