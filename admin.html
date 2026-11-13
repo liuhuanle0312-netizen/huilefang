@@ -249,8 +249,8 @@
     <p style="font-size: 12px; color: var(--sub); margin: 0 0 12px;">开启后全站暂停生成和注册，登录和查看历史不受影响。</p>
     <h2>用户列表</h2>
     <div id="adminUserList" style="font-size: 13px;"></div>
-    <h2>安全日志</h2>
-    <div id="adminSecurityList" style="font-size: 13px;"></div>
+    <h2 id="secLogHead" style="cursor: pointer; user-select: none;" onclick="toggleSecLog()">安全日志 <span id="secLogArrow">▸</span></h2>
+    <div id="adminSecurityList" class="hidden" style="font-size: 13px;"></div>
     <h2>最近操作</h2>
     <div id="adminActivityList" style="font-size: 13px;"></div>
     <h2>意见反馈</h2>
@@ -276,6 +276,22 @@ function escapeHtml(text) {
   return String(text ?? '').replace(/[&<>"']/g, m => map[m]);
 }
 function setMsg(el, text, type = '') { el.textContent = text; el.className = 'msg' + (type ? ' ' + type : ''); }
+
+// 安全日志折叠：点标题展开/收起，默认收起，状态记在本地
+function toggleSecLog() {
+  const list = $('adminSecurityList');
+  const collapsed = list.classList.toggle('hidden');
+  $('secLogArrow').textContent = collapsed ? '▸' : '▾';
+  try { localStorage.setItem('admin-sec-log-collapsed', collapsed ? '1' : '0'); } catch (e) {}
+}
+(function initSecLogFold() {
+  let collapsed = true;
+  try { collapsed = localStorage.getItem('admin-sec-log-collapsed') !== '0'; } catch (e) {}
+  const list = $('adminSecurityList');
+  if (list) list.classList.toggle('hidden', collapsed);
+  const arrow = $('secLogArrow');
+  if (arrow) arrow.textContent = collapsed ? '▸' : '▾';
+})();
 
 let sb, currentUser, myRole = 'user', presenceChannel = null;
 
