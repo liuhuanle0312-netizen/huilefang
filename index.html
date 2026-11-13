@@ -405,7 +405,7 @@ if (window.self !== window.top) { try { window.top.location = window.self.locati
             <details><summary>四、图片怎么保存、怎么防止丢失</summary>
             <ul style="margin: 8px 0; padding-left: 20px;">
               <li>生成成功后图片会自动存到云端历史里，不用手动点保存，换设备登录也能看到。</li>
-              <li>如果保存失败，卡片上会出现「重新保存」按钮，点一下再存一次；千万别直接刷新页面，刷新了这张图就没了，只能重新生成。</li>
+              <li>生成成功后记录立刻进历史，刷新也不会丢；图片文件在后台慢慢传，传好前卡片会显示“图片还没存好”，传好自动变清晰。网络断了也没事，下次打开网站会自动继续传；实在传不上来，卡片上会有「重新保存」按钮，点一下再存一次。</li>
               <li>生成过程中也别刷新或退出，图还在生成时刷新，费用照扣、图也拿不到。</li>
               <li>重要的图点卡片上的「下载」，会直接存到手机下载文件夹里，再从相册或文件管理里找；建议重要的图都下载一份留底，别只依赖云端历史。</li>
               <li>删图是真删除：历史卡片上的删除会把云端文件和记录一起删掉，删了找不回来，删之前想好。</li>
@@ -417,6 +417,7 @@ if (window.self !== window.top) { try { window.top.location = window.self.locati
               <li>生成要等：普通尺寸几十秒，4K 可能要几分钟；进度条是模拟的，数字不代表真实进度，秒数才是真实等了多久。</li>
               <li>生成成功后提示词框会自动清空，是为了方便写下一条；想留着就生成前先复制一份。</li>
               <li>历史列表的图看着有点糊：列表用的是小缩略图，点开就是清晰原图。</li>
+              <li>点历史图看大图时，会先显示一张小图顶着，原图下好立刻变清晰；刚进网站时滑到的图会在后台预先下载好，点开就是原图，不用等。</li>
               <li>第一次打开是登录页；7 天没打开要重新登录；登录框会帮你填好上次的邮箱。</li>
               <li>网站维护中时会暂停生成和注册，登录和看历史不受影响，横幅上有提示。</li>
               <li>网站上显示的余额不一定准，以中转站后台为准；中转站不提供余额接口，网站查不到实时余额。</li>
@@ -1036,6 +1037,8 @@ async function enterApp(user) {
   historyOffset = 0;
   show('viewApp');
   showTab('providers');
+  setupFullPreload();
+  resumePendingUploads();
   loadHistory();
   updateHistoryCount();
   restorePromptDraft();
@@ -1231,6 +1234,41 @@ async function r2Delete(key) {
     });
     return res.ok;
   } catch (e) { return false; }
+}
+
+// v47：Worker 代下代存（http 链接的图）：Worker 在机房高速下载原图直接存 R2，手机只发一个几百字节的链接，
+// 上传几乎不花时间；线上 Worker 还是旧版时会返回 404，调用处自动回退成本地下载再传
+async function r2SaveFromUrl(src) {
+  const token = await r2Token();
+  if (!token) throw new Error('登录已过期');
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 60000);
+  try {
+    const res = await fetch(R2_WORKER_URL + '/save-from-url', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: src }),
+      signal: ctrl.signal,
+    });
+    if (res.status === 404) throw new Error('worker-old');
+    if (!res.ok) {
+      let msg = '图片上传失败';
+      try { const j = await res.json(); if (j && j.error) msg = j.error; } catch (e) {}
+      throw new Error(msg);
+    }
+    const j = await res.json();
+    if (!j || !j.key) throw new Error('图片上传失败');
+    return j.key;
+  } finally { clearTimeout(timer); }
+}
+
+// v47：取一张记录的原图显示链接（R2 直链 / Supabase 签名链接），看大图、预载、续传后刷新卡片共用
+async function recordDisplayUrl(record) {
+  if (!record.image_path) return record.image_url || '';
+  const k = r2KeyOf(record);
+  if (k) return r2ImageUrl(k, await r2Token());
+  const { data } = await sb.storage.from('images').createSignedUrl(record.image_path, SIGNED_URL_TTL);
+  return data && data.signedUrl ? data.signedUrl : '';
 }
 
 // R2 不可用时的备用上传：走原来的 Supabase 存储桶
@@ -2254,50 +2292,123 @@ async function resolveThumbUrl(record) {
   return data && data.signedUrl ? data.signedUrl : null;
 }
 
-// 保存分两步：先插记录（图一出现就已经在网站里了，刷新也不会丢），再慢慢传文件
+// v47：待传图片本机暂存（IndexedDB）：记录先入库、文件慢慢传；刷新、断网也不丢，下次打开自动续传
+function openPendingDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('imggen-pending', 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore('pending', { keyPath: 'recordId' }); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function stashPending(recordId, blob, meta, src) {
+  try {
+    const db = await openPendingDB();
+    await new Promise((res, rej) => {
+      const tx = db.transaction('pending', 'readwrite');
+      tx.objectStore('pending').put({ recordId, blob, meta, src: (src && src.startsWith('http')) ? src : '', createdAt: Date.now() });
+      tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+    });
+  } catch (e) {}
+}
+async function getPending(recordId) {
+  try {
+    const db = await openPendingDB();
+    return await new Promise((res, rej) => {
+      const q = db.transaction('pending', 'readonly').objectStore('pending').get(recordId);
+      q.onsuccess = () => res(q.result || null); q.onerror = () => rej(q.error);
+    });
+  } catch (e) { return null; }
+}
+async function clearPending(recordId) {
+  try { const db = await openPendingDB(); db.transaction('pending', 'readwrite').objectStore('pending').delete(recordId); } catch (e) {}
+}
+async function listPending() {
+  try {
+    const db = await openPendingDB();
+    return await new Promise((res, rej) => {
+      const q = db.transaction('pending', 'readonly').objectStore('pending').getAll();
+      q.onsuccess = () => res(q.result || []); q.onerror = () => rej(q.error);
+    });
+  } catch (e) { return []; }
+}
+
+// 保存分两步（v47）：先插一条很小的记录（图一出现就已经在网站里了，刷新也不会丢），再慢慢传文件
+// 关键修法：吉吉返回的是 base64 图，拼成 data: 链接有 8MB 多，v46 把整条 data: 链接塞进 image_url 去插库，
+// 手机慢网下这一个请求就要传 8MB，超时失败 → 记录根本没插进去 → 全部显示“重新保存”，刷新就没了。
+// 现在 data: 图只插 image_url: null（请求只有几百字节），图本身先放本机 IndexedDB 暂存，再传云端。
 async function saveRecord(src, meta) {
-  // 第一步：先把记录插进去，只存原链接
+  const isData = src && src.startsWith('data:');
+  let preBlob = null;
+  if (isData) {
+    try { preBlob = dataUrlToBlob(src); } catch (e) {}
+  }
+  // 第一步：先把记录插进去；data: 图不存链接，只存空，等文件传好再补路径
   const { data: row, error: insErr } = await sb.from('generations')
-    .insert({ ...meta, image_path: null, image_url: src, thumb_path: null }).select().single();
+    .insert({ ...meta, image_path: null, image_url: isData ? null : src, thumb_path: null }).select().single();
   if (insErr) throw new Error('保存失败');
-  // 第二步：下载原图、传到云存储，传好后把记录补上文件路径
-  const up = await uploadImageFile(src, meta, row.id);
+  // 图先暂存本机：刷新、断网也不丢，下次打开自动续传
+  if (preBlob) { try { await stashPending(row.id, preBlob, meta, ''); } catch (e) {} }
+  // 第二步：传文件（data: 图直接用已解好的 blob，不用再下载一次；http 链接优先走 Worker 代下代存）
+  const up = await uploadWithRetry(src, meta, row.id, preBlob);
   if (up.uploadFailed) return { record: row, displayUrl: src, thumbUrl: null, warn: up.warn, uploadFailed: true };
+  try { await clearPending(row.id); } catch (e) {}
   return { record: up.record, displayUrl: src, thumbUrl: up.thumbUrl, warn: up.warn, uploadFailed: false };
 }
 
-// 第二步：把图片文件传到云存储，传好后更新记录（文件没传上去也不丢记录，只等重试）
-async function uploadImageFile(src, meta, rowId) {
-  let blob;
-  try {
-    blob = await toBlob(src);
-  } catch (e) {
-    return { record: null, thumbUrl: null, warn: '图片链接过期后会失效', uploadFailed: true };
+// 上传失败自动重试（最多 3 次，间隔 2 秒、4 秒），三次都失败才算真的失败
+async function uploadWithRetry(src, meta, rowId, preBlob) {
+  let last = null;
+  for (let i = 0; i < 3; i++) {
+    const up = await uploadImageFile(src, meta, rowId, preBlob);
+    if (!up.uploadFailed) return up;
+    last = up;
+    if (i < 2) await new Promise(r => setTimeout(r, 2000 * (i + 1)));
   }
+  return last || { record: null, thumbUrl: null, warn: '图片链接过期后会失效', uploadFailed: true };
+}
+
+// 第二步：把图片文件传到云存储，传好后更新记录（文件没传上去也不丢记录，只等重试）
+async function uploadImageFile(src, meta, rowId, preBlob) {
+  const isData = src && src.startsWith('data:');
+  const isHttp = src && /^https?:\/\//.test(src);
+  // http 链接：先试 Worker 代下代存（手机只发一个短链接，最快；线上 Worker 还是旧版时会 404，自动回退本地上传）
+  if (isHttp && !preBlob) {
+    try {
+      const key = await r2SaveFromUrl(src);
+      const { data: updated, error: updErr } = await sb.from('generations')
+        .update({ image_path: 'r2:' + key, thumb_path: null, image_url: null })
+        .eq('id', rowId).select().single();
+      if (!updErr && updated) {
+        try { await clearPending(rowId); } catch (e) {}
+        return { record: updated, thumbUrl: null, warn: '', uploadFailed: false };
+      }
+    } catch (e) { /* 回退本地下载再传 */ }
+  }
+  let blob = preBlob || null;
+  if (!blob) {
+    try { blob = await toBlob(src); }
+    catch (e) { return { record: null, thumbUrl: null, warn: '图片链接过期后会失效', uploadFailed: true }; }
+  }
+  // 下载好的原图也暂存本机一份：链接过期后重试、刷新后续传都还有图可用
+  try { await stashPending(rowId, blob, meta, src); } catch (e) {}
   const type = blob.type && blob.type.startsWith('image/') ? blob.type : 'image/png';
   const ext = ({ 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/svg+xml': 'svg' })[type] || 'png';
 
   let thumbBlob = null;
   try { thumbBlob = await makeThumb(blob); } catch (e) {}
-  let image_path = null, thumb_path = null, uploaded = false;
-  try {
-    const key = await r2Upload(blob, ext, type);
-    image_path = 'r2:' + key;
-    if (thumbBlob) {
-      try { const tk = await r2Upload(thumbBlob, 'jpg', 'image/jpeg'); thumb_path = 'r2:' + tk; } catch (e) {}
-    }
-    uploaded = true;
-  } catch (e) {
-    // R2 不可用时回退到 Supabase 存储
-    try {
-      image_path = await supabaseUpload(blob, ext, type);
-      if (thumbBlob) {
-        try { thumb_path = await supabaseUpload(thumbBlob, 'jpg', 'image/jpeg'); } catch (e) {}
-      }
-      uploaded = true;
-    } catch (e2) { uploaded = false; }
-  }
-  if (!uploaded) return { record: null, thumbUrl: null, warn: '图片链接过期后会失效', uploadFailed: true };
+  // 主图和缩略图同时传（原来是先传完主图再传缩略图，串行多等一倍）；缩略图失败不影响主图
+  const putOne = async (b, ex, ty) => {
+    try { return 'r2:' + await r2Upload(b, ex, ty); }
+    catch (e) { return await supabaseUpload(b, ex, ty); } // R2 不可用时回退到 Supabase 存储
+  };
+  const settled = await Promise.allSettled([
+    putOne(blob, ext, type),
+    thumbBlob ? putOne(thumbBlob, 'jpg', 'image/jpeg') : Promise.resolve(null),
+  ]);
+  if (settled[0].status !== 'fulfilled') return { record: null, thumbUrl: null, warn: '图片链接过期后会失效', uploadFailed: true };
+  const image_path = settled[0].value;
+  const thumb_path = settled[1].status === 'fulfilled' ? settled[1].value : null;
   const { data: updated, error: updErr } = await sb.from('generations')
     .update({ image_path, thumb_path, file_size_bytes: blob.size, image_url: null })
     .eq('id', rowId).select().single();
@@ -2305,6 +2416,38 @@ async function uploadImageFile(src, meta, rowId) {
   let thumbUrl = null;
   try { thumbUrl = await resolveThumbUrl(updated); } catch (e) {}
   return { record: updated, thumbUrl, warn: '', uploadFailed: false };
+}
+
+// 下次打开网站时，把上次没传完的图自动续传上去；传好的卡片就地刷新，不用整页重载
+async function resumePendingUploads() {
+  const items = await listPending();
+  if (!items.length) return;
+  for (const it of items) {
+    try {
+      const { data: rec } = await sb.from('generations').select('id,image_path').eq('id', it.recordId).single();
+      if (!rec) { await clearPending(it.recordId); continue; }
+      if (rec.image_path) { await clearPending(it.recordId); continue; }
+      const up = await uploadWithRetry(it.src || '', it.meta, it.recordId, it.blob || null);
+      if (!up.uploadFailed) {
+        await clearPending(it.recordId);
+        refreshCard(it.recordId);
+      }
+    } catch (e) {}
+  }
+}
+// 就地刷新一张卡片（续传成功后用）：按记录 id 找到旧卡，换成带新图的新卡
+async function refreshCard(recordId) {
+  const old = document.querySelector('.card[data-rid="' + recordId + '"]');
+  if (!old) return;
+  try {
+    const { data: rec } = await sb.from('generations').select('*').eq('id', recordId).single();
+    if (!rec || !rec.image_path) return;
+    const url = await recordDisplayUrl(rec);
+    let thumb = null;
+    try { thumb = await resolveThumbUrl(rec); } catch (e) {}
+    const next = addCard(rec, url, false, thumb);
+    old.replaceWith(next);
+  } catch (e) {}
 }
 
 // 卡片上的“重新保存”按钮：row 有值只重试上传，没值重试整套保存
@@ -2321,9 +2464,11 @@ function attachRetrySave(card, src, meta, row) {
     pendingSaves++;
     try {
       if (row) {
-        // 记录已在，只重试上传
-        const up = await uploadImageFile(src, meta, row.id);
+        // 记录已在，只重试上传：本机暂存里有原图就直接用，不用再下一次
+        const st = await getPending(row.id);
+        const up = await uploadWithRetry(st && st.src ? st.src : src, meta, row.id, st && st.blob ? st.blob : null);
         if (up.uploadFailed) throw new Error('保存失败');
+        await clearPending(row.id);
         if (up.warn) setStatus(up.warn);
         const real = addCard(up.record, src, true, up.thumbUrl);
         $('gallery').insertBefore(real, card);
@@ -2402,7 +2547,11 @@ async function loadHistory() {
     r2thumbrows.forEach(r => { thumbs[r.thumb_path] = r2ImageUrl(r.thumb_path.slice(3), token); });
   }
   
-  data.forEach(r => addCard(r, signed[r.image_path] || r.image_url, false, r.thumb_path ? (thumbs[r.thumb_path] || null) : null));
+  data.forEach(r => {
+    const card = addCard(r, signed[r.image_path] || r.image_url, false, r.thumb_path ? (thumbs[r.thumb_path] || null) : null);
+    // 文件还没存好的记录（刷新后回来也能看到）：卡片上留一个重新保存，用本机暂存的原图重试
+    if (!r.image_path) attachRetrySave(card, r.image_url || '', { prompt: r.prompt, model: r.model, mode: r.mode, size: r.size, gen_seconds: r.gen_seconds }, r);
+  });
   historyOffset += data.length;
   $('loadMore').classList.toggle('hidden', data.length < PAGE_SIZE);
   updateEmpty();
@@ -2440,7 +2589,10 @@ function relativeTime(iso) {
 function addCard(record, src, atTop, thumbSrc) {
   const card = document.createElement('div');
   card.className = 'card';
+  if (record.id) card.dataset.rid = record.id;
+  card._record = record;
   let currentSrc = src;
+  let currentThumb = thumbSrc || null;
   let dl = null;
 
   let imgEl;
@@ -2449,7 +2601,7 @@ function addCard(record, src, atTop, thumbSrc) {
     imgEl.src = thumbSrc || src;
     if (thumbSrc && thumbSrc !== src) imgEl.dataset.thumb = '1';
     imgEl.loading = 'lazy';
-    imgEl.onclick = () => openViewer(currentSrc, record);
+    imgEl.onclick = () => openViewer(currentSrc, record, currentThumb);
     imgEl.onerror = async () => {
       // 缩略图不存在（旧记录）就换回原图
       if (imgEl.dataset.thumb) {
@@ -2481,7 +2633,7 @@ function addCard(record, src, atTop, thumbSrc) {
   } else {
     imgEl = document.createElement('div');
     imgEl.className = 'broken';
-    imgEl.textContent = '图片已失效';
+    imgEl.textContent = record.image_path ? '图片已失效' : '图片还没存好';
   }
 
   const wrap = document.createElement('div');
@@ -2644,6 +2796,7 @@ function addCard(record, src, atTop, thumbSrc) {
   card.append(wrap, meta);
   atTop ? $('gallery').prepend(card) : $('gallery').append(card);
   updateEmpty();
+  observeCardForPreload(card);
   return card;
 }
 
@@ -2891,34 +3044,88 @@ let viewerOpenSeq = 0;
 let viewerPushed = false;
 let viewerScrollY = 0;
 
-async function openViewer(url, record) {
+// v47：大图预载缓存（recordId -> blob 链接）：列表滑到哪张，就在后台把那张原图下好放内存；点开直接从内存出图，不用再等下载
+const fullCache = new Map();
+const FULL_CACHE_MAX = 8;
+function fullCachePut(id, blobUrl) {
+  if (fullCache.has(id)) return;
+  if (fullCache.size >= FULL_CACHE_MAX) {
+    const first = fullCache.keys().next().value;
+    try { URL.revokeObjectURL(fullCache.get(first)); } catch (e) {}
+    fullCache.delete(first);
+  }
+  fullCache.set(id, blobUrl);
+}
+let fullPreloadObserver = null;
+function setupFullPreload() {
+  if (fullPreloadObserver) return;
+  // 省流量模式 / 2G 不预载原图，避免偷跑流量
+  const saveData = navigator.connection && navigator.connection.saveData;
+  const slow = navigator.connection && /^(slow-2g|2g)$/.test(navigator.connection.effectiveType || '');
+  if (saveData || slow) return;
+  fullPreloadObserver = new IntersectionObserver((entries) => {
+    entries.forEach(async (en) => {
+      if (!en.isIntersecting) return;
+      const card = en.target;
+      fullPreloadObserver.unobserve(card);
+      const rec = card._record;
+      const rid = card.dataset && card.dataset.rid;
+      if (!rid || !rec || !rec.image_path || fullCache.has(rid)) return;
+      try {
+        const url = await recordDisplayUrl(rec);
+        if (!url) return;
+        const blob = await toBlob(url);
+        fullCachePut(rid, URL.createObjectURL(blob));
+      } catch (e) {}
+    });
+  }, { rootMargin: '600px' });
+}
+function observeCardForPreload(card) {
+  if (fullPreloadObserver && card.dataset && card.dataset.rid) fullPreloadObserver.observe(card);
+}
+
+async function openViewer(url, record, thumbUrl) {
   const v = $('viewer');
   // 记下打开前的位置，关掉大图要回到这里；同时锁住底下页面，别让它跟着滚
   viewerScrollY = window.scrollY;
   document.body.style.overflow = 'hidden';
-  let show = url;
-  // 打开前先换一个新鲜链接，凭证过期也不会打不开
-  if (record && record.image_path) {
-    try {
-      const r2key = r2KeyOf(record);
-      if (r2key) show = r2ImageUrl(r2key, await r2Token());
-      else {
-        const { data } = await sb.storage.from('images').createSignedUrl(record.image_path, SIGNED_URL_TTL);
-        if (data && data.signedUrl) show = data.signedUrl;
-      }
-    } catch (e) {}
+  const imgEl = v.querySelector('img');
+  // 先立刻显示列表里已经下好的小图（模糊放大顶着），不等 6MB 原图下载完再白屏
+  if (thumbUrl) {
+    imgEl.crossOrigin = 'anonymous';
+    imgEl.src = thumbUrl;
+    imgEl.style.filter = 'blur(6px)';
+  } else {
+    imgEl.style.filter = '';
   }
-  v.querySelector('img').src = show;
   v.style.display = 'flex';
   // 看大图缩放淡入：每次打开都重新触发一次动画
   v.classList.remove('zooming');
   void v.offsetWidth;
   v.classList.add('zooming');
-  tintViewerBg(show);
   // 压一条浏览记录：手机按返回键时先关大图，而不是直接退出页面
   viewerOpenSeq = ++viewerSeq;
   viewerPushed = false;
   try { history.pushState({ viewerSeq: viewerOpenSeq }, ''); viewerPushed = true; } catch (e) {}
+  // 原图：内存里预载好的直接用（秒开）；没有就后台取新鲜链接（凭证过期也不会打不开）
+  let show = url;
+  if (record && record.id && fullCache.has(record.id)) show = fullCache.get(record.id);
+  else if (record && record.image_path) {
+    try { show = await recordDisplayUrl(record); } catch (e) {}
+  }
+  // 用一张后台图先下好再换上去，避免大图从上往下慢慢露出来
+  const pre = new Image();
+  pre.onload = () => {
+    imgEl.crossOrigin = (show.startsWith('blob:') || show.startsWith('data:') || show.includes('workers.dev') || show.includes('supabase.co')) ? 'anonymous' : '';
+    imgEl.src = show;
+    imgEl.style.filter = '';
+    tintViewerFrom(imgEl);
+  };
+  pre.onerror = () => {
+    imgEl.src = show;
+    imgEl.style.filter = '';
+  };
+  pre.src = show;
 }
 function closeViewerUI() {
   if (!viewerOpenSeq) return;
@@ -2947,23 +3154,18 @@ function closeViewer() {
 window.addEventListener('popstate', () => {
   if (viewerOpenSeq) closeViewerUI();
 });
-// 查看大图时背景取图片主色（取不到就用默认背景）
-function tintViewerBg(url) {
-  const img = new Image();
-  img.crossOrigin = 'anonymous';
-  img.onload = () => {
-    try {
-      const c = document.createElement('canvas');
-      c.width = 32; c.height = 32;
-      const ctx = c.getContext('2d');
-      ctx.drawImage(img, 0, 0, 32, 32);
-      const d = ctx.getImageData(0, 0, 32, 32).data;
-      let r = 0, g = 0, b = 0, n = 0;
-      for (let i = 0; i < d.length; i += 16) { r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; }
-      $('viewer').style.background = `rgb(${Math.round(r / n * 0.35)},${Math.round(g / n * 0.35)},${Math.round(b / n * 0.35)})`;
-    } catch (e) { /* 跨域取不到色就用默认背景 */ }
-  };
-  img.src = url;
+// 查看大图时背景取图片主色：直接用已经显示的大图取色，不再另外下一张（原来会重复下载一次原图）
+function tintViewerFrom(imgEl) {
+  try {
+    const c = document.createElement('canvas');
+    c.width = 32; c.height = 32;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(imgEl, 0, 0, 32, 32);
+    const d = ctx.getImageData(0, 0, 32, 32).data;
+    let r = 0, g = 0, b = 0, n = 0;
+    for (let i = 0; i < d.length; i += 16) { r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; }
+    $('viewer').style.background = `rgb(${Math.round(r / n * 0.35)},${Math.round(g / n * 0.35)},${Math.round(b / n * 0.35)})`;
+  } catch (e) { /* 跨域取不到色就用默认背景 */ }
 }
 
 $('viewer').onclick = () => closeViewer();
