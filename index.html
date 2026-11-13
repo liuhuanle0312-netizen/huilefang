@@ -2254,41 +2254,104 @@ async function resolveThumbUrl(record) {
   return data && data.signedUrl ? data.signedUrl : null;
 }
 
+// 保存分两步：先插记录（图一出现就已经在网站里了，刷新也不会丢），再慢慢传文件
 async function saveRecord(src, meta) {
-  let image_path = null, image_url = null, thumb_path = null, warn = '';
-  try {
-    const blob = await toBlob(src);
-    meta.file_size_bytes = blob.size;
-    const type = blob.type && blob.type.startsWith('image/') ? blob.type : 'image/png';
-    const ext = ({ 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/svg+xml': 'svg' })[type] || 'png';
+  // 第一步：先把记录插进去，只存原链接
+  const { data: row, error: insErr } = await sb.from('generations')
+    .insert({ ...meta, image_path: null, image_url: src, thumb_path: null }).select().single();
+  if (insErr) throw new Error('保存失败');
+  // 第二步：下载原图、传到云存储，传好后把记录补上文件路径
+  const up = await uploadImageFile(src, meta, row.id);
+  if (up.uploadFailed) return { record: row, displayUrl: src, thumbUrl: null, warn: up.warn, uploadFailed: true };
+  return { record: up.record, displayUrl: src, thumbUrl: up.thumbUrl, warn: up.warn, uploadFailed: false };
+}
 
-    let thumbBlob = null;
-    try { thumbBlob = await makeThumb(blob); } catch (e) {}
+// 第二步：把图片文件传到云存储，传好后更新记录（文件没传上去也不丢记录，只等重试）
+async function uploadImageFile(src, meta, rowId) {
+  let blob;
+  try {
+    blob = await toBlob(src);
+  } catch (e) {
+    return { record: null, thumbUrl: null, warn: '图片链接过期后会失效', uploadFailed: true };
+  }
+  const type = blob.type && blob.type.startsWith('image/') ? blob.type : 'image/png';
+  const ext = ({ 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/svg+xml': 'svg' })[type] || 'png';
+
+  let thumbBlob = null;
+  try { thumbBlob = await makeThumb(blob); } catch (e) {}
+  let image_path = null, thumb_path = null, uploaded = false;
+  try {
+    const key = await r2Upload(blob, ext, type);
+    image_path = 'r2:' + key;
+    if (thumbBlob) {
+      try { const tk = await r2Upload(thumbBlob, 'jpg', 'image/jpeg'); thumb_path = 'r2:' + tk; } catch (e) {}
+    }
+    uploaded = true;
+  } catch (e) {
+    // R2 不可用时回退到 Supabase 存储
     try {
-      const key = await r2Upload(blob, ext, type);
-      image_path = 'r2:' + key;
-      if (thumbBlob) {
-        try { const tk = await r2Upload(thumbBlob, 'jpg', 'image/jpeg'); thumb_path = 'r2:' + tk; } catch (e) {}
-      }
-    } catch (e) {
-      // R2 不可用时回退到 Supabase 存储，图不会丢
       image_path = await supabaseUpload(blob, ext, type);
       if (thumbBlob) {
         try { thumb_path = await supabaseUpload(thumbBlob, 'jpg', 'image/jpeg'); } catch (e) {}
       }
-    }
-  } catch (e) {
-    if (src.startsWith('data:')) throw new Error('图片上传失败');
-    image_url = src;
-    warn = '图片链接过期后会失效';
+      uploaded = true;
+    } catch (e2) { uploaded = false; }
   }
-  
-  const { data, error } = await sb.from('generations')
-    .insert({ ...meta, image_path, image_url, thumb_path }).select().single();
-  if (error) throw new Error('保存失败');
+  if (!uploaded) return { record: null, thumbUrl: null, warn: '图片链接过期后会失效', uploadFailed: true };
+  const { data: updated, error: updErr } = await sb.from('generations')
+    .update({ image_path, thumb_path, file_size_bytes: blob.size, image_url: null })
+    .eq('id', rowId).select().single();
+  if (updErr) return { record: null, thumbUrl: null, warn: '', uploadFailed: true };
   let thumbUrl = null;
-  try { thumbUrl = await resolveThumbUrl(data); } catch (e) {}
-  return { record: data, displayUrl: src, thumbUrl, warn };
+  try { thumbUrl = await resolveThumbUrl(updated); } catch (e) {}
+  return { record: updated, thumbUrl, warn: '', uploadFailed: false };
+}
+
+// 卡片上的“重新保存”按钮：row 有值只重试上传，没值重试整套保存
+function attachRetrySave(card, src, meta, row) {
+  const acts = card.querySelector('.actions');
+  if (!acts || acts.querySelector('.retry-save')) return;
+  const rb = document.createElement('button');
+  rb.textContent = '重新保存';
+  rb.className = 'retry-save';
+  rb.onclick = async () => {
+    if (rb.disabled) return;
+    rb.disabled = true;
+    rb.textContent = '保存中…';
+    pendingSaves++;
+    try {
+      if (row) {
+        // 记录已在，只重试上传
+        const up = await uploadImageFile(src, meta, row.id);
+        if (up.uploadFailed) throw new Error('保存失败');
+        if (up.warn) setStatus(up.warn);
+        const real = addCard(up.record, src, true, up.thumbUrl);
+        $('gallery').insertBefore(real, card);
+        card.remove();
+        updateHistoryCount();
+      } else {
+        // 记录还没插进去，重试整套
+        const saved = await saveRecord(src, meta);
+        const real = addCard(saved.record, saved.displayUrl, true, saved.thumbUrl);
+        $('gallery').insertBefore(real, card);
+        card.remove();
+        historyOffset++;
+        updateHistoryCount();
+        if (saved.uploadFailed) {
+          // 记录已在，只是文件没传上去：新卡片上留一个只重试上传的按钮
+          attachRetrySave(real, src, meta, saved.record);
+          setStatus('保存失败', true);
+        }
+      }
+    } catch (err) {
+      rb.disabled = false;
+      rb.textContent = '重新保存';
+      setStatus('保存失败', true);
+    } finally {
+      pendingSaves--;
+    }
+  };
+  acts.append(rb);
 }
 
 async function updateHistoryCount() {
@@ -2703,43 +2766,22 @@ $('genBtn').onclick = async () => {
       historyOffset++;
       pendingSaves++;
       try {
-        const { record, displayUrl, thumbUrl, warn } = await saveRecord(r.url, meta);
-        if (warn) warns.add(warn);
-        // 存好后用正式记录替换占位卡片，位置不变
-        const real = addCard(record, displayUrl, true, thumbUrl);
+        const saved = await saveRecord(r.url, meta);
+        if (saved.warn) warns.add(saved.warn);
+        // 记录已在：用正式记录替换占位卡片，位置不变
+        const real = addCard(saved.record, saved.displayUrl, true, saved.thumbUrl);
         $('gallery').insertBefore(real, placeholder);
         placeholder.remove();
+        if (saved.uploadFailed) {
+          // 文件还没传上去，但记录和图都在：卡片上留重新保存，只重试上传
+          errs.push('保存失败');
+          attachRetrySave(real, r.url, meta, saved.record);
+        }
       } catch (e) {
+        // 连记录都没插进去：占位卡片上留重新保存，重试整套
         errs.push(e.message);
         historyOffset--;
-        // 保存失败：占位卡片上留一个“重新保存”按钮，点一下再存一次
-        const acts = placeholder.querySelector('.actions');
-        if (acts && !acts.querySelector('.retry-save')) {
-          const rb = document.createElement('button');
-          rb.textContent = '重新保存';
-          rb.className = 'retry-save';
-          rb.onclick = async () => {
-            if (rb.disabled) return;
-            rb.disabled = true;
-            rb.textContent = '保存中…';
-            pendingSaves++;
-            try {
-              const saved = await saveRecord(r.url, meta);
-              const real = addCard(saved.record, saved.displayUrl, true, saved.thumbUrl);
-              $('gallery').insertBefore(real, placeholder);
-              placeholder.remove();
-              historyOffset++;
-              updateHistoryCount();
-            } catch (err) {
-              rb.disabled = false;
-              rb.textContent = '重新保存';
-              setStatus('保存失败', true);
-            } finally {
-              pendingSaves--;
-            }
-          };
-          acts.append(rb);
-        }
+        attachRetrySave(placeholder, r.url, meta, null);
       } finally {
         pendingSaves--;
       }
@@ -2750,6 +2792,8 @@ $('genBtn').onclick = async () => {
 
     if (errs.length) {
       setMsg($('genMsg'), `有 ${errs.length} 张保存失败，点卡片上的“重新保存”再试一次`, 'error');
+    } else if (warns.size) {
+      setMsg($('genMsg'), [...warns].join('；'), '');
     }
   } catch (e) {
     skeletons.forEach(s => s.remove());
