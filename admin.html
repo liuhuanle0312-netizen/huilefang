@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+<script>// 防点击劫持：GitHub Pages 设不了 X-Frame-Options，被嵌进 iframe 时跳出来
+if (window.self !== window.top) { try { window.top.location = window.self.location; } catch (e) { document.documentElement.style.display = 'none'; } }</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>管理后台 · 绘乐坊</title>
@@ -367,7 +369,7 @@ async function loadAdmin() {
     const roleName = u.role === 'super_admin' ? '最高管理者' : u.role === 'admin' ? '管理员' : '用户';
     row.innerHTML = `
       <div class="row1">
-        <div><strong>${escapeHtml(u.email || u.id.slice(0, 8))}</strong> <span class="role-badge ${u.role}">${roleName}</span></div>
+        <div><strong>${escapeHtml(u.email || u.id.slice(0, 8))}</strong> <span class="role-badge ${escapeHtml(u.role)}">${roleName}</span></div>
         ${myRole === 'super_admin' && !isSelf && u.role !== 'super_admin' ? `<select class="role-select" title="下发权限">
           <option value="user"${u.role === 'user' ? ' selected' : ''}>用户</option>
           <option value="admin"${u.role === 'admin' ? ' selected' : ''}>管理员</option>
@@ -401,7 +403,7 @@ async function loadAdmin() {
         const url = await getViewUrl(g);
         const item = document.createElement('div');
         item.style.cssText = 'margin-top: 8px;';
-        item.innerHTML = `<div style="font-size: 12px; color: var(--sub);">${g.model || ''} · ${g.size || ''} · ${new Date(g.created_at).toLocaleString()}</div><div style="font-size: 12px; margin: 2px 0;">${escapeHtml(g.prompt || '')}</div>`;
+        item.innerHTML = `<div style="font-size: 12px; color: var(--sub);">${escapeHtml(g.model || '')} · ${escapeHtml(g.size || '')} · ${new Date(g.created_at).toLocaleString()}</div><div style="font-size: 12px; margin: 2px 0;">${escapeHtml(g.prompt || '')}</div>`;
         if (url) {
           const im = document.createElement('img');
           im.src = url;
