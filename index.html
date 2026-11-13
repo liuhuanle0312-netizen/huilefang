@@ -821,6 +821,7 @@ document.addEventListener('visibilitychange', () => {
 
 // 登录过期：自动回登录页并提示
 function showLoginExpired() {
+  closeViewerUI();
   currentUser = null;
   show('viewAuth');
   updateMaintBar();
@@ -2840,8 +2841,17 @@ $('genPrompt').addEventListener('keydown', e => {
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('genBtn').click();
 });
 
+// 大图查看器的开关状态：关掉要回到打开前的位置
+let viewerSeq = 0;
+let viewerOpenSeq = 0;
+let viewerPushed = false;
+let viewerScrollY = 0;
+
 async function openViewer(url, record) {
   const v = $('viewer');
+  // 记下打开前的位置，关掉大图要回到这里；同时锁住底下页面，别让它跟着滚
+  viewerScrollY = window.scrollY;
+  document.body.style.overflow = 'hidden';
   let show = url;
   // 打开前先换一个新鲜链接，凭证过期也不会打不开
   if (record && record.image_path) {
@@ -2861,7 +2871,38 @@ async function openViewer(url, record) {
   void v.offsetWidth;
   v.classList.add('zooming');
   tintViewerBg(show);
+  // 压一条浏览记录：手机按返回键时先关大图，而不是直接退出页面
+  viewerOpenSeq = ++viewerSeq;
+  viewerPushed = false;
+  try { history.pushState({ viewerSeq: viewerOpenSeq }, ''); viewerPushed = true; } catch (e) {}
 }
+function closeViewerUI() {
+  if (!viewerOpenSeq) return;
+  viewerOpenSeq = 0;
+  viewerPushed = false;
+  const v = $('viewer');
+  v.style.display = 'none';
+  v.style.background = '';
+  document.body.style.overflow = '';
+  window.scrollTo({ top: viewerScrollY, behavior: 'instant' });
+}
+// 点大图关闭：走一次后退，让返回键和点按共用同一条关闭路径
+function closeViewer() {
+  if (!viewerOpenSeq) return;
+  const seq = viewerOpenSeq;
+  if (viewerPushed) {
+    viewerPushed = false;
+    history.back();
+    // 兜底：万一返回事件没来，300ms 后自己关（只关当时那一张）
+    setTimeout(() => { if (viewerOpenSeq === seq) closeViewerUI(); }, 300);
+  } else {
+    closeViewerUI();
+  }
+}
+// 手机按返回键：大图开着就先关大图，回到打开前的位置
+window.addEventListener('popstate', () => {
+  if (viewerOpenSeq) closeViewerUI();
+});
 // 查看大图时背景取图片主色（取不到就用默认背景）
 function tintViewerBg(url) {
   const img = new Image();
@@ -2881,7 +2922,7 @@ function tintViewerBg(url) {
   img.src = url;
 }
 
-$('viewer').onclick = () => { $('viewer').style.display = 'none'; $('viewer').style.background = ''; };
+$('viewer').onclick = () => closeViewer();
 $('modalProvider').onclick = (e) => {
   if (e.target === $('modalProvider')) closeModal('modalProvider');
 };
