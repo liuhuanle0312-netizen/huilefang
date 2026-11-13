@@ -1132,13 +1132,14 @@ async function r2Upload(blob, ext, type) {
 }
 async function r2Delete(key) {
   const token = await r2Token();
-  if (!token) return;
+  if (!token) return false;
   try {
-    await fetch(R2_WORKER_URL + '/image?key=' + encodeURIComponent(key), {
+    const res = await fetch(R2_WORKER_URL + '/image?key=' + encodeURIComponent(key), {
       method: 'DELETE',
       headers: { Authorization: 'Bearer ' + token },
     });
-  } catch (e) {}
+    return res.ok;
+  } catch (e) { return false; }
 }
 
 // R2 不可用时的备用上传：走原来的 Supabase 存储桶
@@ -1250,6 +1251,24 @@ function markSelectedProvider() {
 
 // 供应商卡片显示模型数：先读缓存，没有就后台调一次 /models 补上
 const MODEL_COUNT_KEY = 'imggen-model-counts';
+// 测速状态灯持久化：测过一次就记下来，重画列表也不复位
+const SPEED_STATE_KEY = 'imggen-speed-state';
+function getSpeedState() {
+  if (!currentUser) return {};
+  try { return JSON.parse(localStorage.getItem(SPEED_STATE_KEY + '-' + currentUser.id) || '{}'); } catch (e) { return {}; }
+}
+function setSpeedState(pid, ok, title) {
+  if (!currentUser) return;
+  const s = getSpeedState();
+  s[pid] = { ok, title };
+  localStorage.setItem(SPEED_STATE_KEY + '-' + currentUser.id, JSON.stringify(s));
+}
+function clearSpeedState(pid) {
+  if (!currentUser) return;
+  const s = getSpeedState();
+  delete s[pid];
+  localStorage.setItem(SPEED_STATE_KEY + '-' + currentUser.id, JSON.stringify(s));
+}
 function getModelCounts() {
   if (!currentUser) return {};
   try { return JSON.parse(localStorage.getItem(MODEL_COUNT_KEY + '-' + currentUser.id) || '{}'); } catch (e) { return {}; }
@@ -1293,12 +1312,15 @@ function renderProviders() {
 
   ids.forEach((id, idx) => {
     const p = providers[id];
+    const st = getSpeedState()[id];
+    const dotCls = st ? (st.ok ? 'status-dot ok' : 'status-dot bad') : 'status-dot';
+    const dotTitle = st ? st.title : '未测速';
     const card = document.createElement('div');
     card.className = 'provider-card';
     card.dataset.pid = id;
     card.innerHTML = `
       <div class="provider-head">
-        <div style="display: flex; align-items: center; gap: 8px;"><span class="move-btns"><button class="move-btn" ${idx === 0 ? 'disabled' : ''} onclick="moveProvider('${id}', -1)" title="上移">▲</button><button class="move-btn" ${idx === ids.length - 1 ? 'disabled' : ''} onclick="moveProvider('${id}', 1)" title="下移">▼</button></span><div class="provider-name">${escapeHtml(p.name)}</div><span class="status-dot" title="未测速"></span></div>
+        <div style="display: flex; align-items: center; gap: 8px;"><span class="move-btns"><button class="move-btn" ${idx === 0 ? 'disabled' : ''} onclick="moveProvider('${id}', -1)" title="上移">▲</button><button class="move-btn" ${idx === ids.length - 1 ? 'disabled' : ''} onclick="moveProvider('${id}', 1)" title="下移">▼</button></span><div class="provider-name">${escapeHtml(p.name)}</div><span class="${dotCls}" title="${escapeHtml(dotTitle)}"></span></div>
         <div class="provider-actions">
           <button onclick="editProvider('${id}')">编辑</button>
           <button onclick="deleteProvider('${id}')" style="color: var(--danger);">删除</button>
@@ -1347,6 +1369,7 @@ function editProvider(id) {
 function deleteProvider(id) {
   if (!confirm('确定删除这个中转站吗？')) return;
   delete providers[id];
+  clearSpeedState(id);
   const order = loadProviderOrder();
   if (order) saveProviderOrder(order.filter(x => x !== id));
   saveProviders();
@@ -1376,6 +1399,7 @@ function submitProvider(editId) {
   const id = editId || 'provider-' + Date.now();
   const remember = $('providerRemember').checked;
   providers[id] = { name, url, key: remember ? key : '', _hidden: !remember };
+  if (editId) clearSpeedState(editId); // 改过 Key/地址，旧的测速状态作废
   if (!editId) {
     const order = loadProviderOrder();
     if (order && !order.includes(id)) { order.push(id); saveProviderOrder(order); }
@@ -1504,14 +1528,17 @@ async function testProviderSpeed(id, btn) {
     statusEl.textContent = ms + 'ms · 可用';
     statusEl.style.color = 'var(--ok)';
     if (dot) { dot.className = 'status-dot ok'; dot.title = ms + 'ms · 可用'; }
+    setSpeedState(id, true, ms + 'ms · 可用');
   } catch (e) {
     // 401/403 是 Key 不对，超时或连不上是网络问题，分开说
     if (/HTTP 40[13]/.test(e.message || '')) {
       statusEl.textContent = 'Key 不对';
       if (dot) { dot.className = 'status-dot bad'; dot.title = 'Key 不对'; }
+      setSpeedState(id, false, 'Key 不对');
     } else {
       statusEl.textContent = '不通' + (e.name === 'AbortError' ? '（超时）' : e.message ? '（' + e.message + '）' : '');
       if (dot) { dot.className = 'status-dot bad'; dot.title = '不通'; }
+      setSpeedState(id, false, '不通');
     }
     statusEl.style.color = 'var(--danger)';
   } finally {
@@ -2102,20 +2129,57 @@ async function toBlob(src) {
   } finally { clearTimeout(timer); }
 }
 
+// 列表缩略图：把原图缩到宽 320 的 JPEG，GIF/SVG 和本身就小的图不做缩略图
+async function makeThumb(blob) {
+  if (!blob.type || !/^image\/(png|jpeg|webp)$/.test(blob.type)) return null;
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const im = new Image();
+      im.onload = () => resolve(im);
+      im.onerror = () => reject(new Error('thumb'));
+      im.src = url;
+    });
+    if (img.naturalWidth <= 320) return null;
+    const w = 320;
+    const h = Math.round(img.naturalHeight * w / img.naturalWidth);
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    c.getContext('2d').drawImage(img, 0, 0, w, h);
+    return await new Promise(res => c.toBlob(b => res(b), 'image/jpeg', 0.8));
+  } finally { URL.revokeObjectURL(url); }
+}
+
+// 单张记录的缩略图查看链接（存图时用，列表批量用 loadHistory 里的 thumbs 表）
+async function resolveThumbUrl(record) {
+  if (!record.thumb_path) return null;
+  if (record.thumb_path.startsWith('r2:')) return r2ImageUrl(record.thumb_path.slice(3), await r2Token());
+  const { data } = await sb.storage.from('images').createSignedUrl(record.thumb_path, SIGNED_URL_TTL);
+  return data && data.signedUrl ? data.signedUrl : null;
+}
+
 async function saveRecord(src, meta) {
-  let image_path = null, image_url = null, warn = '';
+  let image_path = null, image_url = null, thumb_path = null, warn = '';
   try {
     const blob = await toBlob(src);
     meta.file_size_bytes = blob.size;
     const type = blob.type && blob.type.startsWith('image/') ? blob.type : 'image/png';
     const ext = ({ 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/svg+xml': 'svg' })[type] || 'png';
 
+    let thumbBlob = null;
+    try { thumbBlob = await makeThumb(blob); } catch (e) {}
     try {
       const key = await r2Upload(blob, ext, type);
       image_path = 'r2:' + key;
+      if (thumbBlob) {
+        try { const tk = await r2Upload(thumbBlob, 'jpg', 'image/jpeg'); thumb_path = 'r2:' + tk; } catch (e) {}
+      }
     } catch (e) {
       // R2 不可用时回退到 Supabase 存储，图不会丢
       image_path = await supabaseUpload(blob, ext, type);
+      if (thumbBlob) {
+        try { thumb_path = await supabaseUpload(thumbBlob, 'jpg', 'image/jpeg'); } catch (e) {}
+      }
     }
   } catch (e) {
     if (src.startsWith('data:')) throw new Error('图片上传失败');
@@ -2124,9 +2188,11 @@ async function saveRecord(src, meta) {
   }
   
   const { data, error } = await sb.from('generations')
-    .insert({ ...meta, image_path, image_url }).select().single();
+    .insert({ ...meta, image_path, image_url, thumb_path }).select().single();
   if (error) throw new Error('保存失败');
-  return { record: data, displayUrl: src, warn };
+  let thumbUrl = null;
+  try { thumbUrl = await resolveThumbUrl(data); } catch (e) {}
+  return { record: data, displayUrl: src, thumbUrl, warn };
 }
 
 async function updateHistoryCount() {
@@ -2161,14 +2227,23 @@ async function loadHistory() {
     const { data: s } = await sb.storage.from('images').createSignedUrls(paths, SIGNED_URL_TTL);
     (s || []).forEach(x => { if (x.signedUrl) signed[x.path] = x.signedUrl; });
   }
+  // 缩略图：列表只加载小图，省流量；没有缩略图的旧记录用原图
+  const thumbPaths = data.filter(r => r.thumb_path && !r.thumb_path.startsWith('r2:')).map(r => r.thumb_path);
+  const thumbs = {};
+  if (thumbPaths.length) {
+    const { data: ts } = await sb.storage.from('images').createSignedUrls(thumbPaths, SIGNED_URL_TTL);
+    (ts || []).forEach(x => { if (x.signedUrl) thumbs[x.path] = x.signedUrl; });
+  }
   // R2 的图：直接用 Worker 直链（凭证放 ?token=，因为 <img> 发不了 Authorization 请求头）
   const r2rows = data.filter(r => r.image_path && r.image_path.startsWith('r2:'));
-  if (r2rows.length) {
+  const r2thumbrows = data.filter(r => r.thumb_path && r.thumb_path.startsWith('r2:'));
+  if (r2rows.length || r2thumbrows.length) {
     const token = await r2Token();
     r2rows.forEach(r => { signed[r.image_path] = r2ImageUrl(r.image_path.slice(3), token); });
+    r2thumbrows.forEach(r => { thumbs[r.thumb_path] = r2ImageUrl(r.thumb_path.slice(3), token); });
   }
   
-  data.forEach(r => addCard(r, signed[r.image_path] || r.image_url, false));
+  data.forEach(r => addCard(r, signed[r.image_path] || r.image_url, false, r.thumb_path ? (thumbs[r.thumb_path] || null) : null));
   historyOffset += data.length;
   $('loadMore').classList.toggle('hidden', data.length < PAGE_SIZE);
   updateEmpty();
@@ -2203,7 +2278,7 @@ function relativeTime(iso) {
   return new Date(iso).toLocaleDateString();
 }
 
-function addCard(record, src, atTop) {
+function addCard(record, src, atTop, thumbSrc) {
   const card = document.createElement('div');
   card.className = 'card';
   let currentSrc = src;
@@ -2212,10 +2287,17 @@ function addCard(record, src, atTop) {
   let imgEl;
   if (src) {
     imgEl = document.createElement('img');
-    imgEl.src = src;
+    imgEl.src = thumbSrc || src;
+    if (thumbSrc && thumbSrc !== src) imgEl.dataset.thumb = '1';
     imgEl.loading = 'lazy';
-    imgEl.onclick = () => openViewer(currentSrc);
+    imgEl.onclick = () => openViewer(currentSrc, record);
     imgEl.onerror = async () => {
+      // 缩略图不存在（旧记录）就换回原图
+      if (imgEl.dataset.thumb) {
+        imgEl.dataset.thumb = '';
+        imgEl.src = currentSrc;
+        return;
+      }
       // 链接过期是最常见的原因（之前签名只有 1 小时有效）：重新签发一次再试
       if (record.image_path && !imgEl.dataset.refreshed) {
         imgEl.dataset.refreshed = '1';
@@ -2228,7 +2310,6 @@ function addCard(record, src, atTop) {
         }
         if (fresh) {
           currentSrc = fresh;
-          if (dl) dl.href = fresh;
           imgEl.src = fresh;
           return;
         }
@@ -2268,8 +2349,9 @@ function addCard(record, src, atTop) {
   const refreshInfo = () => { info.textContent = [record.model || 'unknown', sizeText, dimsText, secs, sizeVal].filter(Boolean).join(' · '); };
   refreshInfo();
   info.style.marginBottom = '8px';
-  // 显示图片实际宽高像素（图加载完才知道；缓存图可能已经加载完了）
+  // 显示图片实际宽高像素（图加载完才知道；缓存图可能已经加载完了；缩略图不算）
   const setDims = () => {
+    if (imgEl.dataset.thumb) return;
     if (imgEl.naturalWidth) {
       dimsText = imgEl.naturalWidth + '×' + imgEl.naturalHeight;
       refreshInfo();
@@ -2296,8 +2378,29 @@ function addCard(record, src, atTop) {
     dl.title = '下载';
     dl.href = src;
     const dlExt = src.startsWith('data:image/jpeg') ? 'jpg' : src.startsWith('data:image/gif') ? 'gif' : src.startsWith('data:image/svg+xml') ? 'svg' : src.startsWith('data:image/webp') ? 'webp' : 'png';
-    dl.download = `image-${record.id || Date.now()}.${dlExt}`;
-    dl.target = '_blank';
+    // 跨域链接的 download 属性会被浏览器忽略，改成先下载成 blob 再触发保存
+    dl.onclick = async (e) => {
+      e.preventDefault();
+      if (dl.dataset.busy) return;
+      dl.dataset.busy = '1';
+      dl.textContent = '下载中…';
+      try {
+        const blob = await toBlob(currentSrc);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `image-${record.id || Date.now()}.${dlExt}`;
+        document.body.append(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      } catch (err) {
+        setStatus('下载失败', true);
+      } finally {
+        delete dl.dataset.busy;
+        dl.textContent = '下载';
+      }
+    };
     actions.append(dl);
   }
   
@@ -2351,13 +2454,25 @@ function addCard(record, src, atTop) {
     del.onclick = async () => {
       if (!confirm('确定删除吗？')) return;
       del.disabled = true;
-      if (record.image_path) {
-        const r2key = r2KeyOf(record);
-        if (r2key) await r2Delete(r2key);
-        else await sb.storage.from('images').remove([record.image_path]);
-      }
+      // 先删文件（主图+缩略图），文件删不掉就停下来，别留孤儿文件；存储那步网络断了也别卡死按钮
+      let storageOk = true;
+      try {
+        const paths = [];
+        if (record.image_path) paths.push(record.image_path);
+        if (record.thumb_path) paths.push(record.thumb_path);
+        for (const path of paths) {
+          if (path.startsWith('r2:')) {
+            if (!await r2Delete(path.slice(3))) { storageOk = false; break; }
+          } else {
+            const { error: rmErr } = await sb.storage.from('images').remove([path]);
+            if (rmErr) { storageOk = false; break; }
+          }
+        }
+      } catch (e) { storageOk = false; }
+      if (!storageOk) { del.disabled = false; return setStatus('删除失败，请重试', true); }
       const { error } = await sb.from('generations').delete().eq('id', record.id);
       if (error) { del.disabled = false; return setStatus('删除失败', true); }
+      historyOffset = Math.max(0, historyOffset - 1);
       card.classList.add('deleting');
       setTimeout(() => { card.remove(); updateEmpty(); }, 260);
       updateHistoryCount();
@@ -2488,15 +2603,43 @@ $('genBtn').onclick = async () => {
       historyOffset++;
       pendingSaves++;
       try {
-        const { record, displayUrl, warn } = await saveRecord(r.url, meta);
+        const { record, displayUrl, thumbUrl, warn } = await saveRecord(r.url, meta);
         if (warn) warns.add(warn);
         // 存好后用正式记录替换占位卡片，位置不变
-        const real = addCard(record, displayUrl, true);
+        const real = addCard(record, displayUrl, true, thumbUrl);
         $('gallery').insertBefore(real, placeholder);
         placeholder.remove();
       } catch (e) {
         errs.push(e.message);
         historyOffset--;
+        // 保存失败：占位卡片上留一个“重新保存”按钮，点一下再存一次
+        const acts = placeholder.querySelector('.actions');
+        if (acts && !acts.querySelector('.retry-save')) {
+          const rb = document.createElement('button');
+          rb.textContent = '重新保存';
+          rb.className = 'retry-save';
+          rb.onclick = async () => {
+            if (rb.disabled) return;
+            rb.disabled = true;
+            rb.textContent = '保存中…';
+            pendingSaves++;
+            try {
+              const saved = await saveRecord(r.url, meta);
+              const real = addCard(saved.record, saved.displayUrl, true, saved.thumbUrl);
+              $('gallery').insertBefore(real, placeholder);
+              placeholder.remove();
+              historyOffset++;
+              updateHistoryCount();
+            } catch (err) {
+              rb.disabled = false;
+              rb.textContent = '重新保存';
+              setStatus('保存失败', true);
+            } finally {
+              pendingSaves--;
+            }
+          };
+          acts.append(rb);
+        }
       } finally {
         pendingSaves--;
       }
@@ -2506,7 +2649,7 @@ $('genBtn').onclick = async () => {
     if (results.length > 0) logActivity('generate', (multiMode ? modelsToGen.join(',') : model) + ' · ' + results.length + ' 张');
 
     if (errs.length) {
-      setMsg($('genMsg'), `有 ${errs.length} 张保存失败`, 'error');
+      setMsg($('genMsg'), `有 ${errs.length} 张保存失败，点卡片上的“重新保存”再试一次`, 'error');
     }
   } catch (e) {
     skeletons.forEach(s => s.remove());
@@ -2590,15 +2733,27 @@ $('genPrompt').addEventListener('keydown', e => {
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('genBtn').click();
 });
 
-function openViewer(url) {
+async function openViewer(url, record) {
   const v = $('viewer');
-  v.querySelector('img').src = url;
+  let show = url;
+  // 打开前先换一个新鲜链接，凭证过期也不会打不开
+  if (record && record.image_path) {
+    try {
+      const r2key = r2KeyOf(record);
+      if (r2key) show = r2ImageUrl(r2key, await r2Token());
+      else {
+        const { data } = await sb.storage.from('images').createSignedUrl(record.image_path, SIGNED_URL_TTL);
+        if (data && data.signedUrl) show = data.signedUrl;
+      }
+    } catch (e) {}
+  }
+  v.querySelector('img').src = show;
   v.style.display = 'flex';
   // 看大图缩放淡入：每次打开都重新触发一次动画
   v.classList.remove('zooming');
   void v.offsetWidth;
   v.classList.add('zooming');
-  tintViewerBg(url);
+  tintViewerBg(show);
 }
 // 查看大图时背景取图片主色（取不到就用默认背景）
 function tintViewerBg(url) {

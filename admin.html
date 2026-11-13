@@ -335,14 +335,18 @@ async function loadAdmin() {
   $('statToday').textContent = todayGen ?? '—';
   const { count: newUsers } = await sb.from('profiles').select('id', { count: 'exact', head: true }).gte('created_at', today.toISOString());
   $('statNewUsers').textContent = newUsers ?? '—';
-  // 存储用量：R2 新图（r2: 开头）和 Supabase 旧图分开算
-  const { data: allGens } = await sb.from('generations').select('image_path, file_size_bytes').limit(1000);
+  // 存储用量：R2 新图（r2: 开头）和 Supabase 旧图分开算；分页全量统计，超过 1000 张也不少算
   let r2Count = 0, r2Bytes = 0, oldCount = 0, oldBytes = 0, oldUnknown = 0;
-  (allGens || []).forEach(g => {
-    const isR2 = g.image_path && g.image_path.startsWith('r2:');
-    if (isR2) { r2Count++; r2Bytes += g.file_size_bytes || 0; }
-    else { oldCount++; if (g.file_size_bytes) oldBytes += g.file_size_bytes; else oldUnknown++; }
-  });
+  for (let from = 0; ; from += 1000) {
+    const { data: page } = await sb.from('generations').select('image_path, file_size_bytes').range(from, from + 999);
+    if (!page || !page.length) break;
+    page.forEach(g => {
+      const isR2 = g.image_path && g.image_path.startsWith('r2:');
+      if (isR2) { r2Count++; r2Bytes += g.file_size_bytes || 0; }
+      else { oldCount++; if (g.file_size_bytes) oldBytes += g.file_size_bytes; else oldUnknown++; }
+    });
+    if (page.length < 1000) break;
+  }
   $('statR2Size').textContent = formatSize(r2Bytes);
   $('statR2Label').textContent = `R2 存储用量 · ${r2Count} 张`;
   $('storageOld').textContent = `Supabase 旧图：${oldCount} 张，共 ${formatSize(oldBytes)}${oldUnknown ? `（${oldUnknown} 张无大小记录）` : ''}；R2 免费额度 10GB`;
