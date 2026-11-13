@@ -729,7 +729,17 @@ if (SUPABASE_URL.includes('你的项目') || !window.supabase) {
       if (event === 'PASSWORD_RECOVERY') { recovering = true; show('viewReset'); return; }
       if (recovering) return;
       const user = session?.user || null;
-      if (user && user.id !== currentUser?.id) enterApp(user);
+      // 进站先停在登录页：本地就算还存着登录态，也要主动登录一次才进主体
+      // （INITIAL_SESSION 和 TOKEN_REFRESHED 都不直接进应用，只有主动登录的 SIGNED_IN 才进）
+      if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
+        if (!currentUser) {
+          if (user && user.email) $('authEmail').value = user.email;
+          show('viewAuth');
+          updateMaintBar();
+        }
+        return;
+      }
+      if (event === 'SIGNED_IN' && user && user.id !== currentUser?.id) enterApp(user);
       else if (!user) { const wasIn = !!currentUser; currentUser = null; show('viewAuth'); updateMaintBar(); if (wasIn) setMsg($('authMsg'), '登录已过期，请重新登录', 'error'); }
     }, 0);
   });
@@ -930,6 +940,8 @@ function updateMaintBar() {
 fetchMaintenance().then(updateMaintBar);
 
 async function enterApp(user) {
+  // 已经在应用里就别重复进（登录和二次验证回调可能同时触发两次）
+  if (currentUser && currentUser.id === user.id && !$('viewApp').classList.contains('hidden')) return;
   // 二次验证守门：这个账号开了 MFA 但还没输动态码，先不进应用，等输码
   try {
     const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
