@@ -364,8 +364,6 @@ if (window.self !== window.top) { try { window.top.location = window.self.locati
   #providerList.ios-group .provider-card { background: var(--softest); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: none; margin-bottom: 10px; }
   #providerList.ios-group .provider-card + .provider-card { border-top: 1px solid var(--line); }
   #genBtn { position: relative; overflow: hidden; }
-  @keyframes breathe { from { box-shadow: 0 4px 14px rgba(0,122,255,.20); } to { box-shadow: 0 6px 22px rgba(0,122,255,.40); } }
-  #genBtn:not(:disabled) { animation: breathe 2.6s ease-in-out infinite alternate; }
   @media (prefers-reduced-motion: reduce) { #genBtn, .card { animation: none; transition: none; } }
   #genBtn .ripple { position: absolute; border-radius: 50%; background: rgba(255,255,255,.45); transform: scale(0); animation: rippleAnim .6s ease-out forwards; pointer-events: none; }
   @keyframes rippleAnim { to { transform: scale(1); opacity: 0; } }
