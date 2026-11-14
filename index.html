@@ -1380,6 +1380,15 @@ async function recordDisplayUrl(record) {
   const { data } = await sb.storage.from('images').createSignedUrl(record.image_path, SIGNED_URL_TTL);
   return data && data.signedUrl ? data.signedUrl : '';
 }
+// v52：下载专用链接——R2 走 Worker ?download=1（返回 Content-Disposition: attachment），
+// Supabase 旧图走 signedUrl 的 download:true；浏览器一点就直接进下载器
+async function recordDownloadUrl(record) {
+  if (!record.image_path) return record.image_url || '';
+  const k = r2KeyOf(record);
+  if (k) return r2ImageUrl(k, await r2Token()) + '&download=1';
+  const { data } = await sb.storage.from('images').createSignedUrl(record.image_path, SIGNED_URL_TTL, { download: true });
+  return data && data.signedUrl ? data.signedUrl : '';
+}
 
 // R2 不可用时的备用上传：走原来的 Supabase 存储桶
 async function supabaseUpload(blob, ext, type) {
@@ -2799,29 +2808,9 @@ function addCard(record, src, atTop, thumbSrc) {
     dl.title = '下载';
     dl.href = src;
     const dlExt = src.startsWith('data:image/jpeg') ? 'jpg' : src.startsWith('data:image/gif') ? 'gif' : src.startsWith('data:image/svg+xml') ? 'svg' : src.startsWith('data:image/webp') ? 'webp' : 'png';
-    // 跨域链接的 download 属性会被浏览器忽略，改成先下载成 blob 再触发保存
-    dl.onclick = async (e) => {
-      e.preventDefault();
-      if (dl.dataset.busy) return;
-      dl.dataset.busy = '1';
-      dl.textContent = '下载中…';
-      try {
-        const blob = await toBlob(currentSrc);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `image-${record.id || Date.now()}.${dlExt}`;
-        document.body.append(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
-      } catch (err) {
-        setStatus('下载失败', true);
-      } finally {
-        delete dl.dataset.busy;
-        dl.textContent = '下载';
-      }
-    };
+    // v52：原生下载——链接直接指向带下载标记的地址，浏览器一点就进下载器，不再先下成 blob
+    dl.download = `image-${record.id || Date.now()}.${dlExt}`;
+    (async () => { try { const u = await recordDownloadUrl(record); if (u) dl.href = u; } catch (e) {} })();
     actions.append(dl);
   }
   
