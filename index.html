@@ -3200,12 +3200,10 @@ async function openViewer(url, record, thumbUrl) {
   viewerScrollY = window.scrollY;
   document.body.style.overflow = 'hidden';
   const imgEl = v.querySelector('img');
-  // 先立刻显示列表里已经下好的小图（不加模糊），不等 6MB 原图下载完再白屏；原图下好立刻换清晰版
+  // v51：改回最开始的版本——直接把原图地址交给浏览器慢慢显示（从上往下清晰展开），不再先放小图占位
   imgEl.style.filter = '';
-  if (thumbUrl) {
-    imgEl.crossOrigin = 'anonymous';
-    imgEl.src = thumbUrl;
-  }
+  imgEl.onload = () => tintViewerFrom(imgEl);
+  imgEl.onerror = () => { if (thumbUrl) { imgEl.onerror = null; imgEl.src = thumbUrl; } };
   v.style.display = 'flex';
   // 看大图缩放淡入：每次打开都重新触发一次动画
   v.classList.remove('zooming');
@@ -3221,19 +3219,8 @@ async function openViewer(url, record, thumbUrl) {
   else if (record && record.image_path) {
     try { show = await recordDisplayUrl(record); } catch (e) {}
   }
-  // 用一张后台图先下好再换上去，避免大图从上往下慢慢露出来
-  const pre = new Image();
-  pre.onload = () => {
-    imgEl.crossOrigin = (show.startsWith('blob:') || show.startsWith('data:') || show.includes('workers.dev') || show.includes('supabase.co')) ? 'anonymous' : '';
-    imgEl.src = show;
-    imgEl.style.filter = '';
-    tintViewerFrom(imgEl);
-  };
-  pre.onerror = () => {
-    imgEl.src = show;
-    imgEl.style.filter = '';
-  };
-  pre.src = show;
+  imgEl.crossOrigin = (show.startsWith('blob:') || show.startsWith('data:') || show.includes('workers.dev') || show.includes('supabase.co')) ? 'anonymous' : '';
+  imgEl.src = show;
 }
 function closeViewerUI() {
   if (!viewerOpenSeq) return;
