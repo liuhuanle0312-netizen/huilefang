@@ -3005,6 +3005,10 @@ $('genBtn').onclick = async () => {
     autoGrowPrompt();
     updateGenBtnState();
     checkPromptLength();
+    // 生成成功后参考图也跟着提示词一起清空（继续改加的和手动加的都算），下次重新添加；同时恢复格式选择
+    refImages = [];
+    renderRefPreviews();
+    updateFormatState();
     // 有模型失败时，把多余的骨架占位卡清掉
     while (skeletons.length > results.length) skeletons.pop().remove();
     updateEmpty();
