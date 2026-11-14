@@ -337,6 +337,7 @@ if (window.self !== window.top) { try { window.top.location = window.self.locati
   #viewer img { max-width: 92vw; max-height: 92vh; border-radius: var(--r-lg); box-shadow: 0 16px 50px rgba(0,0,0,.28); }
   @keyframes viewerZoomIn { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: scale(1); } }
   #viewer.zooming img { animation: viewerZoomIn .22s ease-out; }
+  #viewerLoading { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); color: #fff; font-size: 14px; opacity: .85; display: none; pointer-events: none; }
 
   .modal { position: fixed; inset: 0; background: rgba(0,0,0,.30); backdrop-filter: blur(20px) saturate(150%); -webkit-backdrop-filter: blur(20px) saturate(150%); display: none; align-items: center; justify-content: center; z-index: 20; padding: 16px; }
   .modal.show { display: flex; }
@@ -690,7 +691,7 @@ if (window.self !== window.top) { try { window.top.location = window.self.locati
 </div>
 
 <!-- 图片查看器 -->
-<div id="viewer"><img></div>
+<div id="viewer"><div id="viewerLoading">正在加载原图…</div><img></div>
 
 <!-- 模态框：添加中转站 -->
 <div id="modalProvider" class="modal">
@@ -3142,6 +3143,7 @@ let viewerSeq = 0;
 let viewerOpenSeq = 0;
 let viewerPushed = false;
 let viewerScrollY = 0;
+let viewerImgSeq = 0; // v53：打开序号，慢的一次打开不能盖掉后一次
 
 // 大图预载缓存（recordId -> blob 链接）：列表滑到哪张，就在后台把那张原图下好放内存；点开直接从内存出图，不用再等下载（v50：缓存 12 张、提前 1000px）
 const fullCache = new Map();
@@ -3185,14 +3187,18 @@ function observeCardForPreload(card) {
 
 async function openViewer(url, record, thumbUrl) {
   const v = $('viewer');
+  const mySeq = ++viewerImgSeq;
   // 记下打开前的位置，关掉大图要回到这里；同时锁住底下页面，别让它跟着滚
   viewerScrollY = window.scrollY;
   document.body.style.overflow = 'hidden';
   const imgEl = v.querySelector('img');
-  // v51：改回最开始的版本——直接把原图地址交给浏览器慢慢显示（从上往下清晰展开），不再先放小图占位
+  const loadingEl = $('viewerLoading');
+  // v53：先把上一张图清掉再显示加载提示，不让旧图留在屏幕上；序号防止慢的一次打开盖掉后一次
+  imgEl.removeAttribute('src');
   imgEl.style.filter = '';
-  imgEl.onload = () => tintViewerFrom(imgEl);
-  imgEl.onerror = () => { if (thumbUrl) { imgEl.onerror = null; imgEl.src = thumbUrl; } };
+  if (loadingEl) loadingEl.style.display = 'block';
+  imgEl.onload = () => { if (mySeq !== viewerImgSeq) return; if (loadingEl) loadingEl.style.display = 'none'; tintViewerFrom(imgEl); };
+  imgEl.onerror = () => { if (mySeq !== viewerImgSeq) return; if (loadingEl) loadingEl.style.display = 'none'; if (thumbUrl) { imgEl.onerror = null; imgEl.src = thumbUrl; } };
   v.style.display = 'flex';
   // 看大图缩放淡入：每次打开都重新触发一次动画
   v.classList.remove('zooming');
@@ -3208,6 +3214,7 @@ async function openViewer(url, record, thumbUrl) {
   else if (record && record.image_path) {
     try { show = await recordDisplayUrl(record); } catch (e) {}
   }
+  if (mySeq !== viewerImgSeq) return;
   imgEl.crossOrigin = (show.startsWith('blob:') || show.startsWith('data:') || show.includes('workers.dev') || show.includes('supabase.co')) ? 'anonymous' : '';
   imgEl.src = show;
 }
@@ -3215,6 +3222,9 @@ function closeViewerUI() {
   if (!viewerOpenSeq) return;
   viewerOpenSeq = 0;
   viewerPushed = false;
+  viewerImgSeq++;
+  const loadingEl = $('viewerLoading');
+  if (loadingEl) loadingEl.style.display = 'none';
   const v = $('viewer');
   v.style.display = 'none';
   v.style.background = '';
