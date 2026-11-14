@@ -615,7 +615,10 @@ if (window.self !== window.top) { try { window.top.location = window.self.locati
 
           <div class="gen-section hidden" id="tierSection">
             <div class="gen-label">画质</div>
-            <div class="tier-row" id="tierOptions"></div>
+            <div class="select-box">
+              <div class="select-box-trigger" id="tierDisplay"><span>▼</span></div>
+              <div class="select-box-options" id="tierOptions" style="display: none;"></div>
+            </div>
           </div>
 
           <div class="gen-section">
@@ -1852,7 +1855,8 @@ function escapeHtml(text) {
 
 // 画质档位：优先用吉吉在线绘图页的实测列表（2026-11-14 Liu 发的截图），
 // 16:9 是 1280x720 HD / 1920x1088 FHD / 2048x1440 2K / 2560x1440 QHD / 3840x2160 4K（5 档），
-// 21:9 是 3440x1440 UWQHD / 3840x1600 UltraWide 4K（2 档）；
+// 21:9 是 3440x1440 UWQHD / 3840x1600 UltraWide 4K（2 档），
+// 2:3 是吉吉人像/海报那套：1024x1536 HD / 1280x1920 FHD / 1440x2160 2K / 2048x3072 3K；
 // 9:16 截图里是 720x1280 / 1088x1920 / 1440x2560 / 2160x3840，和长边换算结果一致，走通用公式；
 // 其余比例（1:1、3:2、2:3、4:3）没有截图，沿用长边换算：HD 1280 / FHD 1920 / QHD 2560 / 4K 3840，短边按比例换算（取整到 16）
 // 档位尺寸经接口实测：720x1280 与 2160x3840 在 gpt-image-2.6-sunburst 上均返回 200
@@ -1867,6 +1871,12 @@ const TIER_TABLES = {
   '21:9': [
     { label: '3440x1440 UWQHD', size: '3440x1440' },
     { label: '3840x1600 UltraWide 4K', size: '3840x1600' },
+  ],
+  '2:3': [
+    { label: '1024x1536 HD', size: '1024x1536' },
+    { label: '1280x1920 FHD', size: '1280x1920' },
+    { label: '1440x2160 2K', size: '1440x2160' },
+    { label: '2048x3072 3K', size: '2048x3072' },
   ],
 };
 const TIER_LONGS = [
@@ -1897,19 +1907,22 @@ function renderTiers() {
   const tiers = tierSizesFor(ratio);
   if (selectedTier >= tiers.length) selectedTier = tiers.length - 1;
   tiers.forEach((t, i) => {
-    const chip = document.createElement('div');
-    chip.className = 'tier-chip' + (i === selectedTier ? ' active' : '');
-    chip.textContent = t.label;
-    chip.onclick = () => {
+    const opt = document.createElement('div');
+    opt.className = 'select-box-option' + (i === selectedTier ? ' active' : '');
+    opt.textContent = t.label;
+    opt.onclick = () => {
       selectedTier = i;
       selectedSize = t.size;
-      box.querySelectorAll('.tier-chip').forEach(o => o.classList.remove('active'));
-      chip.classList.add('active');
+      box.querySelectorAll('.select-box-option').forEach(o => o.classList.remove('active'));
+      opt.classList.add('active');
+      $('tierDisplay').innerHTML = t.label + ' <span>▼</span>';
+      box.style.display = 'none';
       saveModelSettings();
     };
-    box.append(chip);
+    box.append(opt);
   });
   selectedSize = tiers[selectedTier].size;
+  $('tierDisplay').innerHTML = tiers[selectedTier].label + ' <span>▼</span>';
   $('tierSection').classList.remove('hidden');
 }
 
@@ -1925,7 +1938,11 @@ $('sizeOptions').querySelectorAll('.ratio-card').forEach(card => {
 });
 renderTiers();
 
-// 画质选择
+// 画质选择：点触发框弹出下拉（和吉吉一样），再点一项选中并收起
+$('tierDisplay').addEventListener('click', () => {
+  const opts = $('tierOptions');
+  opts.style.display = opts.style.display === 'none' ? 'block' : 'none';
+});
 $('qualityDisplay').addEventListener('click', () => {
   const opts = $('qualityOptions');
   opts.style.display = opts.style.display === 'none' ? 'block' : 'none';
@@ -2249,6 +2266,7 @@ document.addEventListener('click', (e) => {
   if (!e.target.closest('.select-box')) {
     $('qualityOptions').style.display = 'none';
     $('formatOptions').style.display = 'none';
+    $('tierOptions').style.display = 'none';
   }
 });
 async function request(provider, path, body) {
