@@ -169,7 +169,6 @@ if (window.self !== window.top) { try { window.top.location = window.self.locati
     background: transparent;
     padding: calc(18px + env(safe-area-inset-top, 0px)) calc(22px + env(safe-area-inset-right, 0px)) 8px calc(22px + env(safe-area-inset-left, 0px));
     display: flex; justify-content: space-between; align-items: center;
-    position: sticky; top: 0; z-index: 6;
   }
   .brand-right { display: flex; align-items: center; gap: 10px; }
   .brand-bar .brand-name { font-size: 30px; font-weight: 800; letter-spacing: -0.03em; }
@@ -260,14 +259,14 @@ if (window.self !== window.top) { try { window.top.location = window.self.locati
   .gen-label { font-size: 12px; color: var(--sub); margin-bottom: 8px; font-weight: 600; }
   .ratio-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
   .ratio-card {
-    border: 1px solid var(--line); border-radius: var(--r-md); padding: 8px 4px 7px; text-align: center;
+    border: 1px solid var(--line); border-radius: var(--r-md); padding: 6px 4px 5px; text-align: center;
     cursor: pointer; background: var(--softest); transition: border-color .15s, background-color .15s, transform .12s; position: relative;
   }
   .ratio-card.active::after { content: ''; position: absolute; top: 7px; right: 7px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
   .ratio-card:hover { border-color: var(--accent); }
   .ratio-card.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
-  .ratio-shape-wrap { height: 30px; display: flex; align-items: center; justify-content: center; margin-bottom: 4px; }
-  .ratio-shape { width: 34px; height: 24px; margin: 0; border: 1.5px solid #8e8e93; border-radius: 4px; transform: scale(.8); }
+  .ratio-shape-wrap { height: 24px; display: flex; align-items: center; justify-content: center; margin-bottom: 2px; }
+  .ratio-shape { width: 34px; height: 24px; margin: 0; border: 1.5px solid #8e8e93; border-radius: 4px; transform: scale(.65); }
   .tier-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
   .tier-chip {
     border: 1px solid var(--line); border-radius: var(--r-pill); padding: 8px 2px; text-align: center; cursor: pointer;
