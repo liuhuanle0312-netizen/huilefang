@@ -1861,11 +1861,42 @@ $('multiModelCheck').addEventListener('change', () => {
   $('multiModelHint').classList.toggle('hidden', !on);
 });
 
+// v66：供应商代理中转——cicadas（api.cicadas.top）不回 CORS 头，浏览器直连会被预检拦住，
+// 这类 host 走 huilefang-img Worker 的 /proxy 中转；吉吉直连是通的，不走代理。
+// Worker 用 Authorization 验 Supabase 登录，供应商 Key 放 X-Provider-Key 头转发；
+// 上游状态码和 body 原样返回，所以 Key 不对时仍显示“Key 不对”。
+const PROXY_HOSTS = new Set(['api.cicadas.top']);
+async function providerRequest(provider, targetUrl, options = {}) {
+  const host = new URL(targetUrl).hostname;
+  if (!PROXY_HOSTS.has(host)) return { url: targetUrl, options };
+  const token = await r2Token();
+  if (!token) throw new Error('登录已过期');
+  const headers = { ...(options.headers || {}) };
+  const auth = headers['Authorization'] || headers['authorization'] || '';
+  delete headers['Authorization'];
+  delete headers['authorization'];
+  headers['Authorization'] = 'Bearer ' + token;
+  if (auth) headers['X-Provider-Key'] = auth;
+  return { url: R2_WORKER_URL + '/proxy?url=' + encodeURIComponent(targetUrl), options: { ...options, headers } };
+}
+async function providerFetch(provider, targetUrl, options = {}) {
+  const r = await providerRequest(provider, targetUrl, options);
+  const res = await fetch(r.url, r.options);
+  // 代理自身的登录失败（401 + 未登录）别当成 Key 不对：上游 Key 错的 401 body 是 {error:{message}} 对象
+  if (res.status === 401) {
+    try {
+      const d = await res.clone().json();
+      if (d && d.error === '未登录') throw new Error('登录已过期');
+    } catch (e) { if (e && e.message === '登录已过期') throw e; }
+  }
+  return res;
+}
+
 async function fetchModels(provider) {
   let url = provider.url.replace(/\/+$/, '');
   if (!/\/v\d+$/.test(url)) url += '/v1';
   
-  const res = await retryOnce(() => fetch(url + '/models', {
+  const res = await retryOnce(() => providerFetch(provider, url + '/models', {
     headers: { 'Authorization': 'Bearer ' + provider.key }
   }));
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1891,7 +1922,7 @@ async function testProviderSpeed(id, btn) {
     let url = p.url.replace(/\/+$/, '');
     if (!/\/v\d+$/.test(url)) url += '/v1';
     const t0 = performance.now();
-    const res = await fetch(url + '/models', { headers: { 'Authorization': 'Bearer ' + p.key }, signal: ctrl.signal });
+    const res = await providerFetch(p, url + '/models', { headers: { 'Authorization': 'Bearer ' + p.key }, signal: ctrl.signal });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     await res.json();
     const ms = Math.round(performance.now() - t0);
@@ -1935,7 +1966,7 @@ async function queryProviderBalance(id, btn) {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 8000);
       try {
-        const res = await fetch(u, { headers, signal: ctrl.signal });
+        const res = await providerFetch(p, u, { headers, signal: ctrl.signal });
         if (!res.ok) continue;
         const d = await res.json();
         const q = d && d.data;
@@ -2389,7 +2420,7 @@ async function request(provider, path, body) {
   let url = provider.url.replace(/\/+$/, '');
   if (!/\/v\d+$/.test(url)) url += '/v1';
   
-  const res = await fetch(url + path, {
+  const res = await providerFetch(provider, url + path, {
     method: body ? 'POST' : 'GET',
     headers: { 'Authorization': 'Bearer ' + provider.key, 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined
@@ -2468,11 +2499,12 @@ async function genByImages(provider, prompt, model, size, n, onProgress) {
   if (selectedFormat && selectedFormat !== 'auto') params.output_format = selectedFormat;
   let url = provider.url.replace(/\/+$/, '');
   if (!/\/v\d+$/.test(url)) url += '/v1';
-  const data = await fetchJsonWithProgress(url + '/images/generations', {
+  const genReq = await providerRequest(provider, url + '/images/generations', {
     method: 'POST',
     headers: { 'Authorization': 'Bearer ' + provider.key, 'Content-Type': 'application/json' },
     body: JSON.stringify(params)
-  }, (loaded, total) => {
+  });
+  const data = await fetchJsonWithProgress(genReq.url, genReq.options, (loaded, total) => {
     // 有总长度时按真实下载数据走（同样封顶 99），没总长度时不动，靠模拟进度
     if (total > 0 && onProgress) onProgress(Math.min(99, Math.round(loaded / total * 99)));
   });
@@ -2493,7 +2525,7 @@ function dataUrlToBlob(dataUrl) {
 async function genByEdits(provider, prompt, model, size, n, refUrls, onProgress) {
   let url = provider.url.replace(/\/+$/, '');
   if (!/\/v\d+$/.test(url)) url += '/v1';
-  const results = await Promise.allSettled(Array.from({ length: n }, () => {
+  const results = await Promise.allSettled(Array.from({ length: n }, async () => {
     const form = new FormData();
     form.append('model', model);
     form.append('prompt', prompt);
@@ -2502,11 +2534,12 @@ async function genByEdits(provider, prompt, model, size, n, refUrls, onProgress)
     if (selectedQuality) form.append('quality', selectedQuality);
     // 注意：编辑接口不认 output_format，实测 webp/jpeg 都仍返回 PNG、gif 直接 502，所以这里不发
     refUrls.forEach((u, i) => form.append('image', dataUrlToBlob(u), `ref-${i + 1}.jpg`));
-    return fetchJsonWithProgress(url + '/images/edits', {
+    const editReq = await providerRequest(provider, url + '/images/edits', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + provider.key },
       body: form
-    }, (loaded, total) => {
+    });
+    return fetchJsonWithProgress(editReq.url, editReq.options, (loaded, total) => {
       if (total > 0 && onProgress) onProgress(Math.min(99, Math.round(loaded / total * 99)));
     });
   }));
