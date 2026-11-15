@@ -1593,9 +1593,59 @@ function applyModelSettings() {
   }
 }
 
-function loadProviders() {
-  const saved = localStorage.getItem(PROVIDER_STORE_KEY + '-' + currentUser.id) || '{}';
-  providers = JSON.parse(saved);
+// v68：供应商跟随账号——云端（Supabase providers 表）是准源，本地 localStorage 只做缓存。
+// 注意：Key 也会存进你自己的 Supabase 数据库（RLS 只允许本人读写），不再是只留在单台手机上；
+// 这是“跟随账号”必须付出的代价——不存云端，换浏览器就看不到。表没建好之前先用本地的，不报错。
+async function syncProvidersToCloud() {
+  if (!currentUser || !sb) return;
+  try {
+    const order = loadProviderOrder();
+    const rank = new Map((order || []).map((id, i) => [id, i]));
+    const rows = Object.keys(providers).map((id, i) => ({
+      id,
+      user_id: currentUser.id,
+      name: providers[id].name || '',
+      base_url: providers[id].url || '',
+      api_key: providers[id].key || '',
+      is_hidden: !!providers[id]._hidden,
+      sort_order: rank.has(id) ? rank.get(id) : 1000 + i,
+      last_used: providers[id].lastUsed || 0,
+      updated_at: new Date().toISOString()
+    }));
+    const ids = rows.map(r => r.id);
+    const { data: existing } = await sb.from('providers').select('id').eq('user_id', currentUser.id);
+    const stale = (existing || []).map(r => r.id).filter(id => !ids.includes(id));
+    if (stale.length) await sb.from('providers').delete().eq('user_id', currentUser.id).in('id', stale);
+    if (rows.length) {
+      const { error } = await sb.from('providers').upsert(rows, { onConflict: 'user_id,id' });
+      if (error) throw error;
+    }
+  } catch (e) { console.warn('供应商同步到云端失败（先用本地的）', e); }
+}
+
+async function loadProviders() {
+  let local = {};
+  try { local = JSON.parse(localStorage.getItem(PROVIDER_STORE_KEY + '-' + currentUser.id) || '{}'); } catch (e) { local = {}; }
+  providers = local;
+  try {
+    const { data, error } = await sb.from('providers').select('*').eq('user_id', currentUser.id).order('sort_order', { ascending: true });
+    if (!error && data) {
+      if (data.length) {
+        const cloud = {};
+        const order = [];
+        data.forEach(r => {
+          cloud[r.id] = { name: r.name, url: r.base_url, key: r.api_key || '', ...(r.is_hidden ? { _hidden: true } : {}), ...(r.last_used ? { lastUsed: r.last_used } : {}) };
+          order.push(r.id);
+        });
+        providers = cloud;
+        localStorage.setItem(PROVIDER_STORE_KEY + '-' + currentUser.id, JSON.stringify(providers));
+        // 只有手动排过序才把云端顺序写回本地：没拖过时按上次使用时间排（sort_order 是 1000+ 的默认值），别把顺序写死
+        if (order.length && data.some(r => r.sort_order < 1000)) saveProviderOrder(order);
+      } else if (Object.keys(local).length) {
+        await syncProvidersToCloud(); // 一次性迁移：本地有、云端空，把本地的传上去
+      }
+    }
+  } catch (e) { /* 表还没建或网络问题：先用本地的，下次登录再试 */ }
   renderProviders();
   updateSupplierOptions();
   restoreLastUsedSupplier();
@@ -1604,6 +1654,7 @@ function loadProviders() {
 function saveProviders() {
   localStorage.setItem(PROVIDER_STORE_KEY + '-' + currentUser.id, JSON.stringify(providers));
   updateSupplierOptions();
+  syncProvidersToCloud(); // fire-and-forget：失败也不挡本地操作，下次加载会再同步
 }
 
 // 供应商手动顺序：拖过一次才有，没拖过按上次使用时间排
@@ -1614,6 +1665,7 @@ function loadProviderOrder() {
 function saveProviderOrder(ids) {
   if (!currentUser) return;
   localStorage.setItem(PROVIDER_ORDER_KEY + '-' + currentUser.id, JSON.stringify(ids));
+  syncProvidersToCloud(); // 顺序也跟随账号
 }
 function sortedProviderIds() {
   const order = loadProviderOrder();
