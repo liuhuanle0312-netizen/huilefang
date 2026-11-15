@@ -411,7 +411,25 @@ if (window.self !== window.top) { try { window.top.location = window.self.locati
     .gallery > .card, .select-box-options, #genBtn.generating { animation: none !important; }
     .card.just-generated .card-img-wrap::before, .card.just-generated .card-img-wrap::after { animation: none !important; opacity: 0 !important; }
     .tab-indicator, .brand-bar, .brand-bar .brand-name { transition: none !important; }
+    #aboutView, #providersView, #generateView, .modal.show, .modal.show .modal-box, #viewer.zooming, #empty .empty-art { animation: none !important; }
+    .card-img-wrap img { opacity: 1 !important; transition: none !important; }
   }
+  /* v67：6 个动效 — 历史图加载淡入 / 页签内容淡入 / 弹窗上滑淡入 / 看大图背景淡入 / 卡片按压反馈 / 空状态插画轻浮动
+     全是 CSS，不引任何动画库：站里要的效果 CSS 都能做，引库要多一次下载（4G 慢）、多一个失败点，划不来；
+     Anime.js / Motion 留给以后要 JS 编排的复杂交互（新手引导、画廊筛选重排）时再引 */
+  @keyframes panelIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  #aboutView:not(.hidden), #providersView:not(.hidden), #generateView:not(.hidden) { animation: panelIn .22s ease; }
+  @keyframes modalBgIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes modalIn { from { opacity: 0; transform: translateY(14px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  .modal.show { animation: modalBgIn .18s ease; }
+  .modal.show .modal-box { animation: modalIn .24s cubic-bezier(.32,.72,.35,1); }
+  @keyframes viewerBgIn { from { opacity: 0; } to { opacity: 1; } }
+  #viewer.zooming { animation: viewerBgIn .2s ease; }
+  .card-img-wrap img { opacity: 0; transition: opacity .35s ease; }
+  .card-img-wrap img.img-in { opacity: 1; }
+  .gallery > .card:active { transform: scale(.98); }
+  @keyframes floaty { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+  #empty .empty-art { animation: floaty 6s ease-in-out infinite; }
   #genProgressWrap { background: var(--softest) !important; border: 1px solid var(--line); border-radius: var(--r-md) !important; }
   .stat-box { border: 1px solid var(--line); }
   .stat-box.tint-blue { background: rgba(0,122,255,.10); }
@@ -2986,7 +3004,9 @@ function addCard(record, src, atTop, thumbSrc) {
   }
   if (imgEl.tagName === 'IMG') {
     imgEl.addEventListener('load', setDims);
-    if (imgEl.complete) setDims();
+    // v67：历史图加载淡入——图载完才淡入，缓存图 complete 时直接显示；加载失败会走 onerror 换图/换“图片已失效”，不会一直藏着
+    imgEl.addEventListener('load', () => imgEl.classList.add('img-in'));
+    if (imgEl.complete) { setDims(); imgEl.classList.add('img-in'); }
   }
 
   const actions = document.createElement('div');
