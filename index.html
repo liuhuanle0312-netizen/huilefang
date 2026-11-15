@@ -351,6 +351,12 @@ if (window.self !== window.top) { try { window.top.location = window.self.locati
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; transition: transform .15s, box-shadow .15s; box-shadow: var(--shadow); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
   .card.deleting { transform: scale(.92); opacity: 0; transition: transform .25s ease, opacity .25s ease; }
   .card-img-wrap { position: relative; background: var(--soft); }
+  /* v71：历史卡右边显示用过的参考图（小图条，点开放大） */
+  .card-img-wrap.has-refs { display: flex; align-items: stretch; }
+  .card-img-wrap.has-refs .gen-img-cell { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; }
+  .card-img-wrap .ref-strip { flex: 0 0 60px; max-height: 160px; display: flex; flex-direction: column; gap: 6px; padding: 8px 8px 8px 0; overflow-y: auto; scrollbar-width: none; }
+  .card-img-wrap .ref-strip::-webkit-scrollbar { display: none; }
+  .card-img-wrap .ref-strip img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); cursor: zoom-in; background: var(--soft); opacity: 1; }
   .card-time { position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 10px 8px; background: linear-gradient(transparent, rgba(0,0,0,.55)); color: #fff; font-size: 11px; pointer-events: none; }
   .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
   .card img { max-width: 100%; max-height: 160px; width: auto; height: auto; display: block; margin: 0 auto; cursor: zoom-in; background: var(--soft); }
@@ -2675,7 +2681,7 @@ async function listPending() {
 // 关键修法：吉吉返回的是 base64 图，拼成 data: 链接有 8MB 多，v46 把整条 data: 链接塞进 image_url 去插库，
 // 手机慢网下这一个请求就要传 8MB，超时失败 → 记录根本没插进去 → 全部显示“重新保存”，刷新就没了。
 // 现在 data: 图只插 image_url: null（请求只有几百字节），图本身先放本机 IndexedDB 暂存，再传云端。
-async function saveRecord(src, meta) {
+async function saveRecord(src, meta, refDataUrls) {
   const isData = src && src.startsWith('data:');
   let preBlob = null;
   if (isData) {
@@ -2691,10 +2697,55 @@ async function saveRecord(src, meta) {
   const up = await uploadWithRetry(src, meta, row.id, preBlob);
   if (up.uploadFailed) return { record: row, displayUrl: src, thumbUrl: null, warn: up.warn, uploadFailed: true };
   try { await clearPending(row.id); } catch (e) {}
-  return { record: up.record, displayUrl: src, thumbUrl: up.thumbUrl, warn: up.warn, uploadFailed: false };
+  // v71：参考图也存一份，路径写进 ref_paths（列还没建好时这步静默跳过，主图不受影响）
+  let record = up.record;
+  if (refDataUrls && refDataUrls.length) {
+    try {
+      const paths = await uploadRefImages(refDataUrls);
+      if (paths.length) {
+        const { data: upd } = await sb.from('generations').update({ ref_paths: paths }).eq('id', row.id).select().single();
+        if (upd) record = upd;
+      }
+    } catch (e) {}
+  }
+  return { record, displayUrl: src, thumbUrl: up.thumbUrl, warn: up.warn, uploadFailed: false };
 }
 
 // 上传失败自动重试（最多 3 次，间隔 2 秒、4 秒），三次都失败才算真的失败
+// v71：参考图存档——生成时把用过的参考图也存一份（R2，失败回退 Supabase 存储）；只存路径，某张失败就跳过，不影响主图保存
+async function uploadRefImages(dataUrls) {
+  const jobs = (dataUrls || []).map(async (du) => {
+    try {
+      const blob = dataUrlToBlob(du);
+      const type = blob.type && blob.type.startsWith('image/') ? blob.type : 'image/jpeg';
+      const ext = ({ 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/svg+xml': 'svg' })[type] || 'jpg';
+      try { return 'r2:' + await r2Upload(blob, ext, type); }
+      catch (e) { return await supabaseUpload(blob, ext, type); }
+    } catch (e) { return null; }
+  });
+  return (await Promise.all(jobs)).filter(Boolean);
+}
+
+// v71：按记录里的 ref_paths（R2 键或 Supabase 路径）解析成可直接显示的链接
+async function resolveRefUrls(record) {
+  const paths = Array.isArray(record.ref_paths) ? record.ref_paths : [];
+  if (!paths.length) return [];
+  const map = {};
+  const r2paths = paths.filter(p => p && p.startsWith('r2:'));
+  const sbpaths = paths.filter(p => p && !p.startsWith('r2:'));
+  if (r2paths.length) {
+    const token = await r2Token();
+    r2paths.forEach(p => { map[p] = r2ImageUrl(p.slice(3), token); });
+  }
+  if (sbpaths.length) {
+    try {
+      const { data } = await sb.storage.from('images').createSignedUrls(sbpaths, SIGNED_URL_TTL);
+      (data || []).forEach(x => { if (x.signedUrl) map[x.path] = x.signedUrl; });
+    } catch (e) {}
+  }
+  return paths.map(p => map[p]).filter(Boolean);
+}
+
 async function uploadWithRetry(src, meta, rowId, preBlob) {
   let last = null;
   for (let i = 0; i < 3; i++) {
@@ -2889,8 +2940,28 @@ async function loadHistory() {
     r2thumbrows.forEach(r => { thumbs[r.thumb_path] = r2ImageUrl(r.thumb_path.slice(3), token); });
   }
   
+  // v71：参考图链接批量解析（和主图同一批凭证）
+  const refPathsAll = [];
+  data.forEach(r => { (Array.isArray(r.ref_paths) ? r.ref_paths : []).forEach(p => { if (p && !refPathsAll.includes(p)) refPathsAll.push(p); }); });
+  const refMap = {};
+  if (refPathsAll.length) {
+    const r2ref = refPathsAll.filter(p => p.startsWith('r2:'));
+    const sbref = refPathsAll.filter(p => !p.startsWith('r2:'));
+    if (r2ref.length) {
+      const token = await r2Token();
+      r2ref.forEach(p => { refMap[p] = r2ImageUrl(p.slice(3), token); });
+    }
+    if (sbref.length) {
+      try {
+        const { data: rs } = await sb.storage.from('images').createSignedUrls(sbref, SIGNED_URL_TTL);
+        (rs || []).forEach(x => { if (x.signedUrl) refMap[x.path] = x.signedUrl; });
+      } catch (e) {}
+    }
+  }
+
   data.forEach(r => {
-    const card = addCard(r, signed[r.image_path] || r.image_url, false, r.thumb_path ? (thumbs[r.thumb_path] || null) : null);
+    const refUrls = (Array.isArray(r.ref_paths) ? r.ref_paths : []).map(p => refMap[p]).filter(Boolean);
+    const card = addCard(r, signed[r.image_path] || r.image_url, false, r.thumb_path ? (thumbs[r.thumb_path] || null) : null, refUrls);
     // 文件还没存好的记录（刷新后回来也能看到）：卡片上留一个重新保存，用本机暂存的原图重试
     if (!r.image_path) attachRetrySave(card, r.image_url || '', { prompt: r.prompt, model: r.model, mode: r.mode, size: r.size, gen_seconds: r.gen_seconds }, r);
   });
@@ -2928,7 +2999,7 @@ function relativeTime(iso) {
   return new Date(iso).toLocaleDateString();
 }
 
-function addCard(record, src, atTop, thumbSrc) {
+function addCard(record, src, atTop, thumbSrc, refUrls) {
   const card = document.createElement('div');
   card.className = 'card';
   if (record.id) card.dataset.rid = record.id;
@@ -2985,6 +3056,33 @@ function addCard(record, src, atTop, thumbSrc) {
   timeTag.className = 'card-time';
   timeTag.textContent = relativeTime(record.created_at);
   wrap.append(timeTag);
+  // v71：右边显示这次用的参考图，点开放大看原图；传了链接就直接用，没传就按记录里的路径现解析
+  let stripAttached = false;
+  const attachStrip = (urls) => {
+    const list = (urls || []).filter(Boolean);
+    if (!list.length || stripAttached) return;
+    stripAttached = true;
+    const strip = document.createElement('div');
+    strip.className = 'ref-strip';
+    strip.title = '参考图：点开放大';
+    list.forEach(u => {
+      const t = document.createElement('img');
+      t.src = u;
+      t.loading = 'lazy';
+      t.alt = '参考图';
+      t.onclick = () => openViewer(u, null, null);
+      strip.append(t);
+    });
+    const cell = document.createElement('div');
+    cell.className = 'gen-img-cell';
+    cell.append(imgEl);
+    wrap.append(cell, strip);
+    wrap.classList.add('has-refs');
+  };
+  if (Array.isArray(refUrls)) attachStrip(refUrls);
+  else if (record && Array.isArray(record.ref_paths) && record.ref_paths.length) {
+    resolveRefUrls(record).then(attachStrip).catch(() => {});
+  }
 
   const meta = document.createElement('div');
   meta.className = 'meta';
@@ -3100,6 +3198,7 @@ function addCard(record, src, atTop, thumbSrc) {
         const paths = [];
         if (record.image_path) paths.push(record.image_path);
         if (record.thumb_path) paths.push(record.thumb_path);
+        (Array.isArray(record.ref_paths) ? record.ref_paths : []).forEach(p => { if (p) paths.push(p); });
         for (const path of paths) {
           if (path.startsWith('r2:')) {
             if (!await r2Delete(path.slice(3))) { storageOk = false; break; }
@@ -3239,6 +3338,7 @@ $('genBtn').onclick = async () => {
     updateGenBtnState();
     checkPromptLength();
     // 生成成功后参考图也跟着提示词一起清空（继续改加的和手动加的都算），下次重新添加；同时恢复格式选择
+    const usedRefs = refImages.map(r => r.dataUrl); // v71：先记下这次用的参考图，清空后占位卡和存档还要用
     refImages = [];
     renderRefPreviews();
     updateFormatState();
@@ -3252,11 +3352,11 @@ $('genBtn').onclick = async () => {
       // 生成完立刻在下面显示图片，不等上传存库
       const sk = skeletons.shift();
       if (sk) sk.remove();
-      const placeholder = addCard({ ...meta, created_at: new Date().toISOString() }, r.url, true);
+      const placeholder = addCard({ ...meta, created_at: new Date().toISOString() }, r.url, true, null, usedRefs);
       historyOffset++;
       pendingSaves++;
       try {
-        const saved = await saveRecord(r.url, meta);
+        const saved = await saveRecord(r.url, meta, usedRefs);
         if (saved.warn) warns.add(saved.warn);
         // 记录已在：用正式记录替换占位卡片，位置不变
         const real = addCard(saved.record, saved.displayUrl, true, saved.thumbUrl);
