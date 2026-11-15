@@ -301,10 +301,21 @@ if (window.self !== window.top) { try { window.top.location = window.self.locati
   .tier-chip:hover, .tier-chip.active { border-color: var(--accent); }
   .tier-chip.active { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
   #tierSection, #ratioSection { margin-bottom: 12px; }
-  .skeleton-img { height: 200px; border-radius: var(--r-md); background: linear-gradient(90deg, var(--soft) 25%, var(--soft-hover) 50%, var(--soft) 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite linear; }
+  /* v70：骨架卡改成 ChatGPT 生图式“显影”——几团柔和色块慢慢漂移 + 一道光缓慢扫过，像图正在一点点显出来；秒数和进度都搬进卡里 */
+  .skeleton-img { position: relative; height: 200px; border-radius: var(--r-md); overflow: hidden; background: var(--soft); }
+  .sk-blob { position: absolute; width: 70%; aspect-ratio: 1; border-radius: 50%; filter: blur(28px); opacity: .5; animation: skDrift 9s ease-in-out infinite alternate; pointer-events: none; }
+  .sk-blob.b1 { background: radial-gradient(circle, rgba(0,122,255,.55), transparent 70%); top: -18%; left: -12%; }
+  .sk-blob.b2 { background: radial-gradient(circle, rgba(175,82,222,.45), transparent 70%); bottom: -22%; right: -8%; animation-delay: -3s; }
+  .sk-blob.b3 { background: radial-gradient(circle, rgba(255,149,0,.35), transparent 70%); top: 28%; left: 32%; width: 45%; animation-delay: -6s; }
+  @keyframes skDrift { from { transform: translate(0, 0) scale(1); } to { transform: translate(12%, -10%) scale(1.15); } }
+  .sk-sweep { position: absolute; inset: 0; background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,.32) 50%, transparent 70%); background-size: 250% 100%; animation: skSweep 2.8s linear infinite; pointer-events: none; }
+  @keyframes skSweep { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+  .sk-time { position: absolute; right: 10px; bottom: 10px; padding: 3px 9px; border-radius: 999px; background: rgba(0,0,0,.45); color: #fff; font-size: 12px; font-weight: 600; line-height: 1.5; font-variant-numeric: tabular-nums; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); z-index: 2; }
+  .sk-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(128,128,128,.3); z-index: 2; }
+  .sk-bar { height: 100%; width: 0%; background: var(--accent); transition: width .3s ease; }
   .skeleton-card { background: var(--softest); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
-  .skeleton-card .meta { padding: 12px; font-size: 12px; color: var(--sub); }
-  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  .skeleton-card .meta { padding: 12px; font-size: 12px; color: var(--sub); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .skeleton-card .sk-pct { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
   #genPrompt { max-height: 200px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
   .select-box-trigger.disabled { opacity: .45; cursor: not-allowed; }
   .ratio-card.active .ratio-shape { border-color: var(--accent); }
@@ -412,6 +423,7 @@ if (window.self !== window.top) { try { window.top.location = window.self.locati
     .card.just-generated .card-img-wrap::before, .card.just-generated .card-img-wrap::after { animation: none !important; opacity: 0 !important; }
     .tab-indicator, .brand-bar, .brand-bar .brand-name { transition: none !important; }
     #aboutView, #providersView, #generateView, .modal.show, .modal.show .modal-box, #viewer.zooming, #empty .empty-art { animation: none !important; }
+    .sk-blob, .sk-sweep { animation: none !important; }
     .card-img-wrap img { opacity: 1 !important; transition: none !important; }
   }
   /* v67：6 个动效 — 历史图加载淡入 / 页签内容淡入 / 弹窗上滑淡入 / 看大图背景淡入 / 卡片按压反馈 / 空状态插画轻浮动
@@ -2243,6 +2255,9 @@ function setGenProgress(p) {
   genProgressValue = Math.max(0, Math.min(100, Math.round(p)));
   $('genProgressPercent').textContent = genProgressValue + '%';
   $('genProgressBar').style.width = genProgressValue + '%';
+  // v70：进度同步写进骨架占位卡（底边细条 + 右侧百分比）
+  document.querySelectorAll('.skeleton-card .sk-bar').forEach(el => { el.style.width = genProgressValue + '%'; });
+  document.querySelectorAll('.skeleton-card .sk-pct').forEach(el => { el.textContent = genProgressValue + '%'; });
 }
 function startSimProgress() {
   stopSimProgress();
@@ -3153,7 +3168,7 @@ $('genBtn').onclick = async () => {
   $('genProgressTarget').textContent = multiMode ? `正在用 ${provider.name} 对比 ${modelsToGen.length} 个模型…` : `正在用 ${provider.name} · ${model} 生成…`;
   setMsg($('genMsg'), '');
 
-  $('genProgressWrap').classList.remove('hidden');
+  // v70：旧的进度条不再单独显示，秒数和进度都搬进骨架占位卡
   genStartTime = Date.now();
   setGenProgress(0);
   $('genProgressTime').textContent = '0 秒';
@@ -3161,6 +3176,7 @@ $('genBtn').onclick = async () => {
   genProgressTimer = setInterval(() => {
     const elapsed = (Date.now() - genStartTime) / 1000;
     $('genProgressTime').textContent = Math.round(elapsed) + ' 秒';
+    document.querySelectorAll('.skeleton-card .sk-time').forEach(el => { el.textContent = Math.round(elapsed) + ' 秒'; });
   }, 500);
   // 模拟进度：没真实数据时慢慢爬升，封顶 99
   startSimProgress();
@@ -3170,7 +3186,8 @@ $('genBtn').onclick = async () => {
   for (let i = 0; i < (multiMode ? modelsToGen.length : n); i++) {
     const sk = document.createElement('div');
     sk.className = 'card skeleton-card';
-    sk.innerHTML = '<div class="skeleton-img"></div><div class="meta">正在生成…</div>';
+    const skModel = multiMode ? modelsToGen[i] : model;
+    sk.innerHTML = '<div class="skeleton-img"><div class="sk-blob b1"></div><div class="sk-blob b2"></div><div class="sk-blob b3"></div><div class="sk-sweep"></div><div class="sk-time">0 秒</div><div class="sk-progress"><div class="sk-bar"></div></div></div><div class="meta"><span>正在生成 · ' + escapeHtml(skModel) + '</span><span class="sk-pct">0%</span></div>';
     $('gallery').prepend(sk);
     skeletons.push(sk);
   }
@@ -3207,6 +3224,7 @@ $('genBtn').onclick = async () => {
     await finishProgress();
     const totalTime = Math.round((Date.now() - genStartTime) / 1000);
     $('genProgressTime').textContent = totalTime + ' 秒';
+    document.querySelectorAll('.skeleton-card .sk-time').forEach(el => { el.textContent = totalTime + ' 秒'; });
     // 时间定格在生成耗时上，不再继续走（之前保存阶段计时还在跑，会和下面的总时间对不上）
     clearInterval(genProgressTimer);
     genProgressTimer = null;
