@@ -351,12 +351,9 @@ if (window.self !== window.top) { try { window.top.location = window.self.locati
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; transition: transform .15s, box-shadow .15s; box-shadow: var(--shadow); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
   .card.deleting { transform: scale(.92); opacity: 0; transition: transform .25s ease, opacity .25s ease; }
   .card-img-wrap { position: relative; background: var(--soft); }
-  /* v71：历史卡右边显示用过的参考图（小图条，点开放大） */
-  .card-img-wrap.has-refs { display: flex; align-items: stretch; }
-  .card-img-wrap.has-refs .gen-img-cell { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; }
-  .card-img-wrap .ref-strip { flex: 0 0 60px; max-height: 160px; display: flex; flex-direction: column; gap: 6px; padding: 8px 8px 8px 0; overflow-y: auto; scrollbar-width: none; }
-  .card-img-wrap .ref-strip::-webkit-scrollbar { display: none; }
-  .card-img-wrap .ref-strip img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); cursor: zoom-in; background: var(--soft); opacity: 1; }
+  /* v72：参考图小缩略图改到左下角、时间上面一排；只有用过参考图生成的卡片才有，没用的正常显示 */
+  .card-img-wrap .ref-strip { position: absolute; left: 8px; bottom: 34px; z-index: 2; display: flex; flex-direction: row; gap: 6px; }
+  .card-img-wrap .ref-strip img { width: 40px; height: 40px; aspect-ratio: 1; object-fit: cover; border-radius: 8px; border: 1.5px solid rgba(255,255,255,.85); box-shadow: 0 2px 8px rgba(0,0,0,.35); cursor: zoom-in; background: var(--soft); opacity: 1; }
   .card-time { position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 10px 8px; background: linear-gradient(transparent, rgba(0,0,0,.55)); color: #fff; font-size: 11px; pointer-events: none; }
   .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
   .card img { max-width: 100%; max-height: 160px; width: auto; height: auto; display: block; margin: 0 auto; cursor: zoom-in; background: var(--soft); }
@@ -3056,7 +3053,7 @@ function addCard(record, src, atTop, thumbSrc, refUrls) {
   timeTag.className = 'card-time';
   timeTag.textContent = relativeTime(record.created_at);
   wrap.append(timeTag);
-  // v71：右边显示这次用的参考图，点开放大看原图；传了链接就直接用，没传就按记录里的路径现解析
+  // v72：左下角、时间上面一排小参考图，点开放大、关了就恢复；只有这次用过参考图生成的卡片才显示，没用的正常显示；传了链接就直接用，没传就按记录里的路径现解析
   let stripAttached = false;
   const attachStrip = (urls) => {
     const list = (urls || []).filter(Boolean);
@@ -3073,11 +3070,7 @@ function addCard(record, src, atTop, thumbSrc, refUrls) {
       t.onclick = () => openViewer(u, null, null);
       strip.append(t);
     });
-    const cell = document.createElement('div');
-    cell.className = 'gen-img-cell';
-    cell.append(imgEl);
-    wrap.append(cell, strip);
-    wrap.classList.add('has-refs');
+    wrap.append(strip);
   };
   if (Array.isArray(refUrls)) attachStrip(refUrls);
   else if (record && Array.isArray(record.ref_paths) && record.ref_paths.length) {
