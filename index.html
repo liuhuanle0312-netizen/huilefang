@@ -1540,12 +1540,33 @@ async function recordDownloadUrl(record) {
   return data && data.signedUrl ? data.signedUrl : '';
 }
 
-// R2 不可用时的备用上传：走原来的 Supabase 存储桶
+// v73：任何一步都不能无限等：超过时限就当失败，界面才不会永远卡在“保存中…”
+function withTimeout(promise, ms, msg) {
+  let timer = null;
+  const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(msg)), ms); });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+// R2 不可用时的备用上传：直接调 Storage REST 接口（不用 SDK，才能像 R2 一样加 120 秒超时；SDK 的 upload 没有超时，网一卡就永远等）
 async function supabaseUpload(blob, ext, type) {
+  const token = await r2Token();
+  if (!token) throw new Error('登录已过期');
   const path = currentUser.id + '/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.' + ext;
-  const { error } = await sb.storage.from('images').upload(path, blob, { contentType: type, upsert: false });
-  if (error) throw new Error('图片上传失败');
-  return path;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 120000);
+  try {
+    const res = await fetch(SUPABASE_URL + '/storage/v1/object/images/' + path, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + token, 'Content-Type': type },
+      body: blob,
+      signal: ctrl.signal,
+    });
+    if (!res.ok) throw new Error('图片上传失败');
+    return path;
+  } catch (e) {
+    if (e && e.name === 'AbortError') throw new Error('图片上传超时');
+    throw e;
+  } finally { clearTimeout(timer); }
 }
 
 
@@ -2685,14 +2706,15 @@ async function saveRecord(src, meta, refDataUrls) {
     try { preBlob = dataUrlToBlob(src); } catch (e) {}
   }
   // 第一步：先把记录插进去；data: 图不存链接，只存空，等文件传好再补路径
-  const { data: row, error: insErr } = await sb.from('generations')
-    .insert({ ...meta, image_path: null, image_url: isData ? null : src, thumb_path: null }).select().single();
+  const { data: row, error: insErr } = await withTimeout(
+    sb.from('generations').insert({ ...meta, image_path: null, image_url: isData ? null : src, thumb_path: null }).select().single(),
+    60000, '保存记录超时');
   if (insErr) throw new Error('保存失败');
   // 图先暂存本机：刷新、断网也不丢，下次打开自动续传
   if (preBlob) { try { await stashPending(row.id, preBlob, meta, ''); } catch (e) {} }
   // 第二步：传文件（data: 图直接用已解好的 blob，不用再下载一次；http 链接优先走 Worker 代下代存）
   const up = await uploadWithRetry(src, meta, row.id, preBlob);
-  if (up.uploadFailed) return { record: row, displayUrl: src, thumbUrl: null, warn: up.warn, uploadFailed: true };
+  if (up.uploadFailed) return { record: row, displayUrl: src, thumbUrl: null, warn: up.warn, uploadFailed: true, errMsg: up.errMsg };
   try { await clearPending(row.id); } catch (e) {}
   // v71：参考图也存一份，路径写进 ref_paths（列还没建好时这步静默跳过，主图不受影响）
   let record = up.record;
@@ -2751,7 +2773,7 @@ async function uploadWithRetry(src, meta, rowId, preBlob) {
     last = up;
     if (i < 2) await new Promise(r => setTimeout(r, 2000 * (i + 1)));
   }
-  return last || { record: null, thumbUrl: null, warn: '图片链接过期后会失效', uploadFailed: true };
+  return last || { record: null, thumbUrl: null, warn: '图片链接过期后会失效', uploadFailed: true, errMsg: '图片上传失败' };
 }
 
 // 第二步：把图片文件传到云存储，传好后更新记录（文件没传上去也不丢记录，只等重试）
@@ -2762,9 +2784,9 @@ async function uploadImageFile(src, meta, rowId, preBlob) {
   if (isHttp && !preBlob) {
     try {
       const key = await r2SaveFromUrl(src);
-      const { data: updated, error: updErr } = await sb.from('generations')
-        .update({ image_path: 'r2:' + key, thumb_path: null, image_url: null })
-        .eq('id', rowId).select().single();
+      const { data: updated, error: updErr } = await withTimeout(
+        sb.from('generations').update({ image_path: 'r2:' + key, thumb_path: null, image_url: null }).eq('id', rowId).select().single(),
+        30000, '保存记录超时');
       if (!updErr && updated) {
         try { await clearPending(rowId); } catch (e) {}
         return { record: updated, thumbUrl: null, warn: '', uploadFailed: false };
@@ -2774,7 +2796,7 @@ async function uploadImageFile(src, meta, rowId, preBlob) {
   let blob = preBlob || null;
   if (!blob) {
     try { blob = await toBlob(src); }
-    catch (e) { return { record: null, thumbUrl: null, warn: '图片链接过期后会失效', uploadFailed: true }; }
+    catch (e) { return { record: null, thumbUrl: null, warn: '图片链接过期后会失效', uploadFailed: true, errMsg: (e && e.message) || '图片下载失败' }; }
   }
   // 下载好的原图也暂存本机一份：链接过期后重试、刷新后续传都还有图可用
   try { await stashPending(rowId, blob, meta, src); } catch (e) {}
@@ -2792,15 +2814,18 @@ async function uploadImageFile(src, meta, rowId, preBlob) {
     putOne(blob, ext, type),
     thumbBlob ? putOne(thumbBlob, 'jpg', 'image/jpeg') : Promise.resolve(null),
   ]);
-  if (settled[0].status !== 'fulfilled') return { record: null, thumbUrl: null, warn: '图片链接过期后会失效', uploadFailed: true };
+  if (settled[0].status !== 'fulfilled') return { record: null, thumbUrl: null, warn: '图片链接过期后会失效', uploadFailed: true, errMsg: (settled[0].reason && settled[0].reason.message) || '图片上传失败' };
   const image_path = settled[0].value;
   const thumb_path = settled[1].status === 'fulfilled' ? settled[1].value : null;
-  const { data: updated, error: updErr } = await sb.from('generations')
-    .update({ image_path, thumb_path, file_size_bytes: blob.size, image_url: null })
-    .eq('id', rowId).select().single();
-  if (updErr) return { record: null, thumbUrl: null, warn: '', uploadFailed: true };
+  let updated, updErr;
+  try {
+    ({ data: updated, error: updErr } = await withTimeout(
+      sb.from('generations').update({ image_path, thumb_path, file_size_bytes: blob.size, image_url: null }).eq('id', rowId).select().single(),
+      30000, '保存记录超时'));
+  } catch (e) { updErr = e; }
+  if (updErr) return { record: null, thumbUrl: null, warn: '', uploadFailed: true, errMsg: (updErr && updErr.message) || '保存记录超时' };
   let thumbUrl = null;
-  try { thumbUrl = await resolveThumbUrl(updated); } catch (e) {}
+  try { thumbUrl = await withTimeout(resolveThumbUrl(updated), 15000, '缩略图超时'); } catch (e) {}
   return { record: updated, thumbUrl, warn: '', uploadFailed: false };
 }
 
@@ -2847,16 +2872,30 @@ function attachRetrySave(card, src, meta, row) {
   rb.setAttribute('aria-label', '重新保存');
   rb.onclick = async () => {
     if (rb.disabled) return;
+    // v73：先看本机还有没有原图：data: 图的原图只在本机暂存里，暂存没了、链接也没有，这张就救不回来了，直接明说，不让它空转
+    if (row) {
+      const st0 = await getPending(row.id);
+      const hasSrc = (st0 && st0.src) || src;
+      const hasBlob = st0 && st0.blob;
+      if (!hasSrc && !hasBlob) { setStatus('这张图的原图已丢失，无法重新保存', true); return; }
+    }
     rb.disabled = true;
     rb.innerHTML = ICONS.refresh + '保存中…';
     rb.title = '保存中…';
+    // v73：按钮上显示已经等了多少秒，等了多久心里有数，不再是不知道要等多久的死转圈
+    const startedAt = Date.now();
+    const tick = setInterval(() => {
+      const s = Math.floor((Date.now() - startedAt) / 1000);
+      rb.innerHTML = ICONS.refresh + '保存中… ' + s + 's';
+      rb.title = '保存中… ' + s + 's';
+    }, 1000);
     pendingSaves++;
     try {
       if (row) {
         // 记录已在，只重试上传：本机暂存里有原图就直接用，不用再下一次
         const st = await getPending(row.id);
         const up = await uploadWithRetry(st && st.src ? st.src : src, meta, row.id, st && st.blob ? st.blob : null);
-        if (up.uploadFailed) throw new Error('保存失败');
+        if (up.uploadFailed) throw new Error(up.errMsg || '保存失败');
         await clearPending(row.id);
         if (up.warn) setStatus(up.warn);
         const real = addCard(up.record, src, true, up.thumbUrl);
@@ -2874,15 +2913,16 @@ function attachRetrySave(card, src, meta, row) {
         if (saved.uploadFailed) {
           // 记录已在，只是文件没传上去：新卡片上留一个只重试上传的按钮
           attachRetrySave(real, src, meta, saved.record);
-          setStatus('保存失败', true);
+          setStatus('保存失败：' + (saved.errMsg || '请重试'), true);
         }
       }
     } catch (err) {
       rb.disabled = false;
       rb.innerHTML = ICONS.refresh + '重新保存';
       rb.title = '重新保存';
-      setStatus('保存失败', true);
+      setStatus('保存失败：' + (err.message || '请重试'), true);
     } finally {
+      clearInterval(tick);
       pendingSaves--;
     }
   };
@@ -3358,7 +3398,7 @@ $('genBtn').onclick = async () => {
         placeholder.remove();
         if (saved.uploadFailed) {
           // 文件还没传上去，但记录和图都在：卡片上留重新保存，只重试上传
-          errs.push('保存失败');
+          errs.push(saved.errMsg || '保存失败');
           attachRetrySave(real, r.url, meta, saved.record);
         }
       } catch (e) {
@@ -3375,7 +3415,7 @@ $('genBtn').onclick = async () => {
     if (results.length > 0) logActivity('generate', (multiMode ? modelsToGen.join(',') : model) + ' · ' + results.length + ' 张');
 
     if (errs.length) {
-      setMsg($('genMsg'), `有 ${errs.length} 张保存失败，点卡片上的“重新保存”再试一次`, 'error');
+      setMsg($('genMsg'), `有 ${errs.length} 张保存失败（${errs[0]}），点卡片上的“重新保存”再试一次`, 'error');
     } else if (warns.size) {
       setMsg($('genMsg'), [...warns].join('；'), '');
     }
